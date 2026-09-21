@@ -595,7 +595,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">1.4</span>
+    <span id="app-ver">1.5</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
@@ -617,7 +617,7 @@
             <input class="rt-input" id="rt-to" placeholder="e.g. Vancouver, BC" autocomplete="off">
             <div class="dd-menu"></div>
         </div>
-        <div class="rt-label">途经 <span style="font-weight:400;color:#aaa;">（可选，多算一条经过这里的路线，如 Bellevue）</span></div>
+        <div class="rt-label">途经 <span style="font-weight:400;color:#aaa;">（可选，填了就只走经过这里的路线）</span></div>
         <div class="dd-wrap rt-ac">
             <input class="rt-input" id="rt-via" placeholder="e.g. Bellevue, WA" autocomplete="off">
             <div class="dd-menu"></div>
@@ -1955,25 +1955,20 @@
             const destination = toEl.dataset.placeId ? { placeId: toEl.dataset.placeId } : { address: toTxt };
             const FM = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.description';
             const base = { origin, destination, travelMode: 'DRIVE', routingPreference: 'TRAFFIC_AWARE', languageCode: 'zh-CN' };
-            const data = await gpost('https://routes.googleapis.com/directions/v2:computeRoutes',
-                { ...base, computeAlternativeRoutes: true }, FM);
-            if (!data.routes || !data.routes.length) throw new Error('找不到路线，请检查起点和终点');
-            let list = data.routes.slice(0, 3);
-
-            // Optional 途经: one extra route forced through that point (Google often returns only 1 route)
             const viaEl = document.getElementById('rt-via'), viaTxt = viaEl.value.trim();
+            let list;
             if (viaTxt) {
-                try {
-                    const v = await gpost('https://routes.googleapis.com/directions/v2:computeRoutes', {
-                        ...base, intermediates: [{ via: true, ...(viaEl.dataset.placeId ? { placeId: viaEl.dataset.placeId } : { address: viaTxt }) }]
-                    }, FM);
-                    const vr = v.routes && v.routes[0];
-                    // keep it unless it's essentially the same as an existing route
-                    if (vr && !list.some(r => Math.abs(r.distanceMeters - vr.distanceMeters) < 300)) {
-                        vr.description = '经 ' + viaTxt.split(',')[0];
-                        list.push(vr);
-                    }
-                } catch (e) { console.error(e); showMapMsg('⚠️ 途经路线计算失败', true); }
+                // 途经: only routes that pass through this point (no direct route)
+                const v = await gpost('https://routes.googleapis.com/directions/v2:computeRoutes', {
+                    ...base, intermediates: [{ via: true, ...(viaEl.dataset.placeId ? { placeId: viaEl.dataset.placeId } : { address: viaTxt }) }]
+                }, FM);
+                if (!v.routes || !v.routes.length) throw new Error('找不到经过「' + viaTxt + '」的路线');
+                list = v.routes.slice(0, 1).map(r => ({ ...r, description: '经 ' + viaTxt.split(',')[0] + (r.description ? ' · ' + r.description : '') }));
+            } else {
+                const data = await gpost('https://routes.googleapis.com/directions/v2:computeRoutes',
+                    { ...base, computeAlternativeRoutes: true }, FM);
+                if (!data.routes || !data.routes.length) throw new Error('找不到路线，请检查起点和终点');
+                list = data.routes.slice(0, 3);
             }
 
             const routes = list.map(r => {
