@@ -200,6 +200,21 @@
         /* Region chips: slightly bolder border to distinguish from individual cities */
         .chip.region-chip { border: 1.5px solid #ddd; font-weight: 600; }
         .chip.region-chip.active { background: #e8472a; border-color: #e8472a; }
+        /* City box: fixed height (3 rows), scroll inside */
+        #city-filters {
+            overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+            border: 1px solid #eee; border-radius: 10px; padding: 6px;
+            align-content: flex-start;
+        }
+        /* Pull-down-to-refresh indicator */
+        header { touch-action: none; }
+        #ptr-indicator {
+            position: fixed; left: 50%; top: 0; z-index: 10000;
+            transform: translate(-50%, -60px);
+            background: white; color: #e8472a; font-size: 0.85rem; font-weight: 600;
+            padding: 8px 16px; border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+            pointer-events: none; white-space: nowrap;
+        }
         .clear-filters-btn {
             background: none; border: none; color: #aaa;
             font-size: 0.82rem; cursor: pointer;
@@ -473,6 +488,7 @@
     <h1>Victoria的美食地图</h1>
     <button id="auth-btn" onclick="logout()">退出</button>
 </header>
+<div id="ptr-indicator">↓ 下拉刷新</div>
 
 <div id="login-screen">
     <div class="login-box">
@@ -705,6 +721,26 @@
     ];
     // Which region chip is active (null = none)
     let activeRegion = null;
+
+    // City chip order: most recently clicked first.
+    // Order is frozen for this session (so chips don't jump under your finger);
+    // new clicks take effect next time the app opens / refreshes.
+    const recentCities = JSON.parse(localStorage.getItem('recentCities') || '[]');
+    const cityOrder = recentCities.slice();
+    function rememberCities(list) {
+        let rc = JSON.parse(localStorage.getItem('recentCities') || '[]');
+        rc = [...list, ...rc.filter(c => !list.includes(c))].slice(0, 60);
+        localStorage.setItem('recentCities', JSON.stringify(rc));
+    }
+    function sortCities(cities) {
+        return cities.sort((a, b) => {
+            const ia = cityOrder.indexOf(a), ib = cityOrder.indexOf(b);
+            if (ia !== -1 && ib !== -1) return ia - ib;
+            if (ia !== -1) return -1;
+            if (ib !== -1) return 1;
+            return a.localeCompare(b);
+        });
+    }
 
     // Single-restaurant list mode (set by clicking name in popup)
     let singleId = null;
@@ -1100,8 +1136,16 @@
         // Region chips (after 全部, before individual cities)
         REGIONS.forEach(r => html += regionChip(r.id, r.label, activeRegion === r.id));
         // Individual cities (sorted)
-        Array.from(allCities).sort().forEach(c => html += chip('city', c, c, activeCityFilters.has(c)));
+        sortCities(Array.from(allCities)).forEach(c => html += chip('city', c, c, activeCityFilters.has(c)));
+        const keepScroll = cityEl.scrollTop;
         cityEl.innerHTML = html;
+        // Box height = 3 rows of chips
+        const first = cityEl.querySelector('.region-chip') || cityEl.querySelector('.chip');
+        if (first) {
+            const rowH = first.offsetHeight, gap = 8, pad = 6;
+            cityEl.style.maxHeight = (rowH * 3 + gap * 2 + pad * 2 + 2) + 'px';
+        }
+        cityEl.scrollTop = keepScroll;
 
         const cuisineEl = document.getElementById('cuisine-filters');
         html = chip('cuisine','all','全部', activeCuisineFilters.size===0);
@@ -1149,13 +1193,19 @@
                 activeCityFilters.clear();
                 // Load the region's cities into activeCityFilters
                 const region = REGIONS.find(r => r.id === value);
-                if (region) region.cities.forEach(c => activeCityFilters.add(c));
+                if (region) {
+                    region.cities.forEach(c => activeCityFilters.add(c));
+                    rememberCities(region.cities);
+                }
             }
         } else if (type === 'city') {
             // Selecting an individual city clears any active region
             activeRegion = null;
             if (value === 'all') { activeCityFilters.clear(); }
-            else { activeCityFilters.has(value) ? activeCityFilters.delete(value) : activeCityFilters.add(value); }
+            else {
+                if (activeCityFilters.has(value)) activeCityFilters.delete(value);
+                else { activeCityFilters.add(value); rememberCities([value]); }
+            }
         } else {
             const set = type==='cuisine' ? activeCuisineFilters : activeTagFilters;
             if (value === 'all') { set.clear(); }
@@ -1578,6 +1628,34 @@
         singleId = null;
         applyFilters();
     }
+
+    // Drag the orange header down to force-refresh (works in home-screen app)
+    (function () {
+        const header = document.querySelector('header');
+        const ind = document.getElementById('ptr-indicator');
+        const TRIGGER = 70;
+        let startY = null, dy = 0;
+        header.addEventListener('touchstart', e => { startY = e.touches[0].clientY; dy = 0; }, { passive: true });
+        header.addEventListener('touchmove', e => {
+            if (startY === null) return;
+            dy = Math.max(0, e.touches[0].clientY - startY);
+            const y = Math.min(dy, 120) - 60;
+            ind.style.transform = `translate(-50%, ${y}px)`;
+            ind.textContent = dy > TRIGGER ? '↻ 松开刷新' : '↓ 下拉刷新';
+        }, { passive: true });
+        header.addEventListener('touchend', () => {
+            if (startY === null) return;
+            if (dy > TRIGGER) {
+                ind.textContent = '刷新中…';
+                ind.style.transform = 'translate(-50%, 50px)';
+                // Cache-busting param so the newest index.html is fetched
+                location.replace(location.pathname + '?r=' + Date.now());
+            } else {
+                ind.style.transform = 'translate(-50%, -60px)';
+            }
+            startY = null; dy = 0;
+        });
+    })();
 
     function focusMarker(id) {
         const m = markers.find(m => m._id === id);
