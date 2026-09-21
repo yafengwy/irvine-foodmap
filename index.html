@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+    <title>🍜 Victoria的美食地图</title>
+    <meta property="og:title" content="Victoria的美食地图"/>
+    <meta property="og:description" content="Victoria的私藏美食地图"/>
+    <meta property="og:image" content="https://maps.googleapis.com/maps/api/staticmap?center=33.65,-117.83&zoom=11&size=600x300&maptype=roadmap&key=AIzaSyBtOo-OFBLyLJOQoWXgxI_RPDansMHVs9w"/>
+    <meta property="og:type" content="website"/>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; width: 100%; }
+        body {
+            font-family: -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
+            background: #f5f5f0; color: #333;
+            overflow: hidden; display: flex; flex-direction: column;
+        }
+
+        /* ── Header ── */
+        header {
+            background: linear-gradient(135deg, #e8472a, #f07f3c);
+            color: white; padding: 14px 16px;
+            display: flex; align-items: center; gap: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2); flex-shrink: 0; z-index: 100;
+        }
+        header h1 { font-size: 1.2rem; font-weight: 700; }
+        header span { font-size: 1.4rem; }
+
+        .main-content { display: flex; flex: 1; overflow: hidden; }
+
+        /* ── Left Panel ── */
+        .left-panel {
+            width: 380px; background: white;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+            z-index: 10; display: flex; flex-direction: column;
+            overflow-y: auto; padding: 16px; gap: 16px;
+        }
+
+        /* ── Map ── */
+        #map-container { flex: 1; position: relative; }
+        #map { width: 100%; height: 100%; background: #e0e0e0; }
+
+        /* ── Custom Marker ──
+           The .custom-marker div is ONLY the icon (18px).
+           AdvancedMarkerElement anchors the bottom-center of this div
+           at the exact geographic coordinate, so the icon is always
+           pinned correctly regardless of label direction or spread offset.
+           The label is positioned ABSOLUTELY outside the container so it
+           never affects the anchor point.
+        */
+        .custom-marker {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+            filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35));
+        }
+        .custom-marker .flag {
+            font-size: 18px; line-height: 1; display: block;
+        }
+        /* Label: default right side */
+        .custom-marker .mname {
+            position: absolute;
+            top: 0;
+            left: calc(100% + 3px);
+            font-size: 11px; font-weight: 600; color: #222;
+            background: rgba(255,255,255,0.88);
+            padding: 2px 5px; border-radius: 4px;
+            /* Each inner <span> is white-space:nowrap so words/chars never break mid-line.
+               The outer box has no max-width — width is driven by the widest span. */
+            line-height: 1.35;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        /* Label on left side */
+        .custom-marker.lbl-left .mname {
+            left: auto;
+            right: calc(100% + 3px);
+        }
+
+        /* ── Form Section ── */
+        .form-section { border-bottom: 1px solid #eee; padding-bottom: 16px; }
+        .form-toggle-header {
+            display: flex; align-items: center; justify-content: space-between;
+            cursor: pointer; user-select: none;
+        }
+        .form-toggle-header h2 {
+            font-size: 1.1rem; color: #e8472a;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .toggle-icon {
+            font-size: 1.2rem; color: #e8472a;
+            transition: transform 0.25s;
+            line-height: 1;
+        }
+        .toggle-icon.open { transform: rotate(45deg); }
+
+        .form-body { margin-top: 14px; }
+        .form-body label {
+            display: block; font-size: 0.9rem; color: #555;
+            margin-bottom: 5px; font-weight: 600;
+        }
+        .form-body input[type="text"],
+        .form-body textarea {
+            width: 100%; padding: 10px 12px; margin-bottom: 14px;
+            border: 1px solid #ddd; border-radius: 8px;
+            font-size: 1rem; font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .form-body input[type="text"]:focus,
+        .form-body textarea:focus {
+            border-color: #e8472a;
+            box-shadow: 0 0 0 3px rgba(232,71,42,0.15); outline: none;
+        }
+        .form-body textarea {
+            min-height: 42px; max-height: 42px; resize: none; overflow-y: auto;
+        }
+
+        /* Submit / Cancel */
+        .submit-btn {
+            width: 100%; background: linear-gradient(90deg,#f07f3c,#e8472a);
+            color: white; border: none; padding: 12px 0; border-radius: 8px;
+            font-size: 1.05rem; font-weight: 600; cursor: pointer;
+            transition: opacity 0.2s; display: flex; align-items: center;
+            justify-content: center; gap: 8px;
+        }
+        .submit-btn:hover { opacity: 0.9; }
+        .submit-btn.editing { background: linear-gradient(90deg,#66bb6a,#43a047); }
+        .cancel-btn {
+            width: 100%; background: #f0f0f0; color: #555; border: none;
+            padding: 10px 0; border-radius: 8px; font-size: 0.95rem;
+            font-weight: 600; cursor: pointer; margin-top: 8px; transition: background 0.2s;
+        }
+        .cancel-btn:hover { background: #e0e0e0; }
+
+        /* Tag input in form */
+        .tag-input-group { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+        .tag-input-group input { flex: 1; margin-bottom: 0 !important; }
+        .tag-input-group button {
+            background: #66bb6a; color: white; border: none;
+            padding: 10px 14px; border-radius: 8px; cursor: pointer;
+            font-size: 0.9rem; transition: background 0.2s; white-space: nowrap;
+        }
+        .tag-input-group button:hover { background: #5cb85c; }
+        .current-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+        .current-tags .tag-chip {
+            background: #2196f3; color: white;
+            padding: 5px 10px; border-radius: 12px; font-size: 0.85rem;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .current-tags .remove-tag {
+            background: none; border: none; color: white;
+            cursor: pointer; font-weight: bold; font-size: 1rem; line-height: 1; padding: 0;
+        }
+        .current-tags .remove-tag:hover { opacity: 0.8; }
+
+        /* Status / Loader */
+        .status-msg {
+            padding: 10px; margin-top: 12px; border-radius: 8px;
+            font-size: 0.88rem; text-align: center; display: none;
+        }
+        .status-msg.success { background: #e8f5e9; color: #388e3c; display: block; }
+        .status-msg.error   { background: #ffebee; color: #d32f2f; display: block; }
+        .loader {
+            border: 3px solid #f3f3f3; border-top: 3px solid #f07f3c;
+            border-radius: 50%; width: 20px; height: 20px;
+            animation: spin 1s linear infinite; display: none; margin: 12px auto 0;
+        }
+        .loader.visible { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Local / All toggle ── */
+        .scope-toggle {
+            display: flex; gap: 0; border-radius: 20px; overflow: hidden;
+            border: 1.5px solid #e8472a; flex-shrink: 0;
+        }
+        .scope-btn {
+            padding: 3px 12px; font-size: 0.8rem; font-weight: 600;
+            border: none; cursor: pointer; background: white; color: #e8472a;
+            transition: background 0.15s, color 0.15s;
+        }
+        .scope-btn.active { background: #e8472a; color: white; }
+        .scope-btn:first-child { border-right: 1.5px solid #e8472a; }
+        .filter-section { border-bottom: 1px solid #eee; padding-bottom: 16px; }
+        .filter-section h2 {
+            font-size: 1.05rem; color: #e8472a; margin-bottom: 12px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .filter-group { margin-bottom: 14px; }
+        .filter-group:last-child { margin-bottom: 0; }
+        .filter-group h3 { font-size: 0.9rem; color: #666; margin-bottom: 8px; }
+        .chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+        .chip {
+            background: #eee; padding: 6px 12px; border-radius: 20px;
+            font-size: 0.82rem; cursor: pointer; transition: background 0.2s, color 0.2s;
+            white-space: nowrap; user-select: none;
+        }
+        .chip.active { background: #f07f3c; color: white; }
+        .chip:hover:not(.active) { background: #e0e0e0; }
+        /* Region chips: slightly bolder border to distinguish from individual cities */
+        .chip.region-chip { border: 1.5px solid #ddd; font-weight: 600; }
+        .chip.region-chip.active { background: #e8472a; border-color: #e8472a; }
+        .clear-filters-btn {
+            background: none; border: none; color: #aaa;
+            font-size: 0.82rem; cursor: pointer;
+        }
+        .clear-filters-btn:hover { color: #e8472a; }
+
+        /* ── Tesla Supercharger button ── */
+        #tesla-btn {
+            background: white; border: 1.5px solid #ddd;
+            border-radius: 8px; padding: 2px 8px;
+            font-size: 1rem; cursor: pointer; line-height: 1.4;
+            transition: background 0.15s, border-color 0.15s;
+            flex-shrink: 0;
+        }
+        #tesla-btn.active { background: #fff3cd; border-color: #f0ad00; }
+
+        /* ── Scope toggle ── */
+        .scope-toggle {
+            display: flex; border-radius: 20px; overflow: hidden;
+            border: 1.5px solid #e8472a; flex-shrink: 0;
+        }
+        .scope-btn {
+            padding: 3px 12px; font-size: 0.8rem; font-weight: 600;
+            border: none; cursor: pointer; background: white; color: #e8472a;
+            transition: background 0.15s, color 0.15s;
+        }
+        .scope-btn.active { background: #e8472a; color: white; }
+        .scope-btn:first-child { border-right: 1.5px solid #e8472a; }
+
+        /* ⑨ Manual search row */
+        .search-row {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+        }
+        .search-row label {
+            font-size: 0.9rem; color: #666; white-space: nowrap; font-weight: 600;
+        }
+        .search-row input {
+            flex: 1; padding: 7px 10px; border: 1px solid #ddd;
+            border-radius: 8px; font-size: 0.88rem; font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        .search-row input:focus { border-color: #f07f3c; outline: none; }
+
+        /* ── Restaurant List ── */
+        .restaurant-list-section { display: flex; flex-direction: column; gap: 10px; }
+        .restaurant-list-section h2 { font-size: 1.05rem; color: #e8472a; }
+
+        /* ⑦ List search box */
+        .list-search input {
+            width: 100%; padding: 7px 10px; border: 1px solid #ddd;
+            border-radius: 8px; font-size: 0.88rem; font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        .list-search input:focus { border-color: #e8472a; outline: none; }
+
+        /* Rest Card */
+        .rest-card {
+            background: #fff; border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 14px;
+            padding: 14px 14px 12px; cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s; position: relative;
+        }
+        .rest-card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.12); }
+        .rest-card .name {
+            font-size: 1.05rem; font-weight: 700; margin-bottom: 4px;
+            color: #333; padding-right: 60px;
+        }
+        .rest-card .meta { font-size: 0.82rem; color: #777; margin-bottom: 2px; }
+        .rest-card .meta a.nav-link {
+            color: #1976d2; text-decoration: none; border-bottom: 1px dotted #1976d2;
+        }
+        .rest-card .meta a.nav-link:hover { color: #e8472a; border-color: #e8472a; }
+        .rest-card .tag-cuisine {
+            display: inline-block; padding: 3px 8px; border-radius: 5px;
+            font-size: 0.75rem; font-weight: 600; margin-top: 7px; margin-bottom: 4px;
+        }
+        .c-chinese    { background: #ffebee; color: #d32f2f; }
+        .c-japanese   { background: #e3f2fd; color: #1976d2; }
+        .c-korean     { background: #e8f5e9; color: #388e3c; }
+        .c-vietnamese { background: #fffde7; color: #f9a825; }
+        .c-other      { background: #f3e5f5; color: #7b1fa2; }
+        .tags-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+        .tag-small {
+            display: inline-block; background: #e0f2f7; color: #0277bd;
+            padding: 3px 7px; border-radius: 10px; font-size: 0.7rem;
+        }
+        .note-text { font-size: 0.82rem; color: #888; margin-top: 5px; font-style: italic; }
+        .card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+        .card-btn {
+            background: none; border: none; cursor: pointer;
+            font-size: 1rem; color: #ccc; transition: color 0.2s; padding: 2px;
+        }
+        .card-btn:hover { color: #555; }
+        .card-btn.del:hover { color: #e8472a; }
+        .card-btn.edit:hover { color: #1976d2; }
+        .empty-message { text-align: center; padding: 30px 20px; color: #888; font-size: 0.95rem; }
+
+        /* ── Geolocation button ── */
+        #locate-btn {
+            position: absolute;
+            bottom: 24px; left: 12px;
+            width: 42px; height: 42px;
+            background: white;
+            border: none; border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+            font-size: 1.3rem;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50;
+            transition: box-shadow 0.2s;
+        }
+        #locate-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.35); }
+        #locate-btn.active { background: #e8f5e9; }
+        #locate-btn.loading { animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0%,100% { opacity: 1; }
+            50%      { opacity: 0.4; }
+        }
+        /* Location radius menu */
+        #radius-menu {
+            position: absolute;
+            bottom: 74px; left: 12px;
+            display: flex; flex-direction: column; gap: 6px;
+            align-items: flex-start;
+            z-index: 50;
+        }
+        .radius-opt {
+            background: rgba(232,71,42,0.92);
+            color: white;
+            font-size: 0.78rem; font-weight: 600;
+            padding: 5px 12px; border-radius: 6px;
+            cursor: pointer; white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            border: none;
+            transition: background 0.15s;
+        }
+        .radius-opt:hover { background: rgba(200,50,20,0.95); }
+        .radius-opt.active-radius { background: rgba(50,120,50,0.92); }
+        .radius-opt.hidden { display: none; }
+        .gm-style-iw { width: 240px !important; max-width: 240px !important; }
+        .gm-style-iw-c { padding: 0 !important; border-radius: 10px !important; }
+        /* ① Hide the close-button header row that causes top whitespace */
+        .gm-style-iw-chr {
+            height: 0 !important;
+            overflow: hidden !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        .gm-style-iw-chr button { display: none !important; }
+        /* Allow content scroll, remove extra padding */
+        .gm-style-iw-d {
+            overflow-y: auto !important;
+            max-height: 170px !important;
+            padding: 0 !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        .gm-style-iw-t::after { display: none; }
+        .info-window-content {
+            padding: 10px 12px;
+            font-family: -apple-system,'PingFang SC',sans-serif; color: #333;
+        }
+        .info-window-content h4 { margin: 0 0 5px; font-size: 0.95rem; color: #e8472a; }
+        .info-window-content p { font-size: 0.82rem; margin-bottom: 3px; line-height: 1.4; }
+        .info-window-content a.iw-nav { color: #1976d2; text-decoration: none; border-bottom: 1px dotted #1976d2; }
+        .info-window-content a.iw-nav:hover { color: #e8472a; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-content { flex-direction: column; }
+            /* ② 60:40 — map 60%, panel 40% */
+            .left-panel {
+                width: 100%; height: 40vh; max-height: 40vh;
+                order: 2; padding: 10px; gap: 12px;
+                transition: height 0.3s ease, max-height 0.3s ease;
+                overflow-y: auto;
+            }
+            .left-panel.collapsed {
+                height: 0 !important; max-height: 0 !important;
+                padding-top: 0; padding-bottom: 0; overflow: hidden;
+            }
+            #map-container { order: 1; flex: 1; min-height: 0; }
+
+            /* ③ Drag handle bar at top of panel */
+            .panel-handle {
+                display: flex; justify-content: center; align-items: center;
+                height: 20px; cursor: pointer; flex-shrink: 0;
+                touch-action: none;
+            }
+            .panel-handle::before {
+                content: ''; display: block;
+                width: 36px; height: 4px;
+                background: #ccc; border-radius: 2px;
+            }
+            /* ③ Restore button shown when panel is collapsed */
+            #restore-btn {
+                display: none;
+                position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+                background: rgba(232,71,42,0.92); color: white;
+                border: none; border-radius: 20px;
+                padding: 8px 20px; font-size: 1.1rem; cursor: pointer;
+                z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                letter-spacing: 2px;
+            }
+            #restore-btn.visible { display: block; }
+        }
+        @media (min-width: 769px) {
+            .panel-handle { display: none; }
+            #restore-btn { display: none !important; }
+        }
+        /* ── Back to top (mobile only) ── */
+        #back-top-btn {
+            display: none;
+            position: fixed; bottom: 80px; right: 14px;
+            width: 34px; height: 34px;
+            background: rgba(232,71,42,0.85);
+            color: white; border: none; border-radius: 50%;
+            font-size: 1rem; cursor: pointer; z-index: 500;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            align-items: center; justify-content: center;
+            line-height: 1;
+        }
+        #back-top-btn.visible { display: flex; }
+
+        /* ── GitHub login ── */
+        #auth-btn {
+            margin-left: auto; background: rgba(255,255,255,0.2); color: white;
+            border: 1px solid rgba(255,255,255,0.6); border-radius: 16px;
+            padding: 5px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+            white-space: nowrap;
+        }
+        /* ── Email login screen ── */
+        #login-screen {
+            position: fixed; inset: 0; z-index: 9999;
+            background: linear-gradient(135deg, #e8472a, #f07f3c);
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        body.authed #login-screen { display: none; }
+        .login-box {
+            background: white; border-radius: 14px; padding: 28px 24px;
+            width: 100%; max-width: 340px; box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+        }
+        .login-box h2 { text-align: center; margin-bottom: 18px; font-size: 1.2rem; }
+        .login-box input {
+            width: 100%; padding: 11px 12px; margin-bottom: 10px;
+            border: 1px solid #ddd; border-radius: 8px; font-size: 16px;
+        }
+        .login-box button {
+            width: 100%; padding: 11px; border: none; border-radius: 8px;
+            background: #e8472a; color: white; font-size: 1rem; font-weight: 600; cursor: pointer;
+        }
+        .login-box button:disabled { opacity: 0.6; }
+        #login-msg { color: #c0392b; font-size: 0.85rem; min-height: 1.2em; margin-top: 10px; text-align: center; }
+        #forgot-link { display: block; text-align: center; margin-top: 8px; font-size: 0.82rem; color: #888; cursor: pointer; }
+
+        /* ── Single-restaurant list mode ── */
+        #single-bar {
+            display: none; align-items: center; justify-content: space-between;
+            background: #fff3ef; border: 1px solid #f3c2b5; border-radius: 8px;
+            padding: 6px 10px; margin-bottom: 8px; font-size: 0.82rem; color: #e8472a;
+        }
+        #single-bar.visible { display: flex; }
+        #single-bar button {
+            background: #e8472a; color: white; border: none; border-radius: 12px;
+            padding: 3px 10px; font-size: 0.78rem; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <span>🍜</span>
+    <h1>Victoria的美食地图</h1>
+    <button id="auth-btn" onclick="logout()">退出</button>
+</header>
+
+<div id="login-screen">
+    <div class="login-box">
+        <h2>🍜 Victoria的美食地图</h2>
+        <input type="email" id="login-email" placeholder="邮箱" autocomplete="username">
+        <input type="password" id="login-pass" placeholder="密码" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter')login()">
+        <button id="login-btn" onclick="login()">登录</button>
+        <div id="login-msg"></div>
+        <a id="forgot-link" onclick="forgotPassword()">忘记密码？</a>
+    </div>
+</div>
+
+<div class="main-content">
+    <div class="left-panel" id="left-panel">
+        <!-- ③ Drag handle -->
+        <div class="panel-handle" id="panel-handle" title="下滑收起"></div>
+        <!-- ⑥ Collapsible Add Form -->
+        <div class="form-section">
+            <div class="form-toggle-header" onclick="toggleForm()">
+                <h2 id="form-title">➕ 添加餐厅</h2>
+                <span class="toggle-icon" id="toggle-icon">＋</span>
+            </div>
+            <div class="form-body" id="form-body" style="display:none;">
+                <label for="add-name">餐厅名称</label>
+                <input type="text" id="add-name" placeholder="e.g. 火锅王">
+
+                <label for="add-address">地址</label>
+                <input type="text" id="add-address" placeholder="e.g. 6436 Irvine Blvd, Irvine, CA">
+
+                <label for="add-cuisine">菜式</label>
+                <input type="text" id="add-cuisine" list="cuisine-suggestions" placeholder="e.g. 川菜">
+                <datalist id="cuisine-suggestions"></datalist>
+
+                <label>标签 <span style="color:#aaa;font-weight:400;">(可选)</span></label>
+                <div class="tag-input-group">
+                    <!-- ③ tag input with datalist -->
+                    <input type="text" id="add-tag-input" list="tag-suggestions" placeholder="e.g. 辣, 性价比高">
+                    <datalist id="tag-suggestions"></datalist>
+                    <button type="button" onclick="addTagToForm()">添加</button>
+                </div>
+                <div id="form-current-tags" class="current-tags"></div>
+
+                <label for="add-note">备注 <span style="color:#aaa;font-weight:400;">(可选)</span></label>
+                <textarea id="add-note" placeholder="e.g. 招牌红油火锅，人均 ¥80"></textarea>
+
+                <button class="submit-btn" id="submit-btn" onclick="submitForm()">
+                    📍 添加到地图
+                </button>
+                <button class="cancel-btn" id="cancel-btn" style="display:none;" onclick="clearForm()">
+                    取消编辑
+                </button>
+                <div id="add-status" class="status-msg"></div>
+                <div id="add-loader" class="loader"></div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-section">
+            <h2>
+                🔍 筛选条件
+                <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+                    <button id="tesla-btn" onclick="toggleTesla()" title="显示/隐藏特斯拉超充">
+                        ⚡
+                    </button>
+                    <div class="scope-toggle">
+                        <button class="scope-btn active" id="scope-local" onclick="setScope('local')">本地</button>
+                        <button class="scope-btn"        id="scope-all"   onclick="setScope('all')">全部</button>
+                    </div>
+                    <button class="clear-filters-btn" onclick="clearAllFilters()">✖ 清除</button>
+                </div>
+            </h2>
+
+            <!-- ⑨ Manual search -->
+            <div class="filter-group">
+                <div class="search-row">
+                    <label>手动搜索</label>
+                    <input type="text" id="manual-search" placeholder="名称 / 标签 / 备注…" oninput="applyFilters()">
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <h3>🏙️ 城市 <span style="color:#aaa;font-size:0.78rem;font-weight:400;">（可多选）</span></h3>
+                <div id="city-filters" class="chip-group">
+                    <div class="chip active" data-filter-type="city" data-filter-value="all" onclick="selectFilter(this)">全部</div>
+                </div>
+            </div>
+            <div class="filter-group">
+                <h3>🍽️ 菜系 <span style="color:#aaa;font-size:0.78rem;font-weight:400;">（可多选）</span></h3>
+                <div id="cuisine-filters" class="chip-group">
+                    <div class="chip active" data-filter-type="cuisine" data-filter-value="all" onclick="selectFilter(this)">全部</div>
+                </div>
+            </div>
+            <div class="filter-group">
+                <h3>🏷️ 标签 <span style="color:#aaa;font-size:0.78rem;font-weight:400;">（可多选）</span></h3>
+                <div id="tag-filters" class="chip-group">
+                    <div class="chip active" data-filter-type="tag" data-filter-value="all" onclick="selectFilter(this)">全部</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Restaurant List -->
+        <div class="restaurant-list-section">
+            <h2 id="list-title">🗒️ 餐厅列表 (0)</h2>
+            <!-- ⑦ Name search -->
+            <div class="list-search">
+                <input type="text" id="name-search" placeholder="🔎 搜索餐厅名称…" oninput="applyFilters()">
+            </div>
+            <div id="single-bar">
+                <span id="single-bar-text"></span>
+                <button onclick="exitSingle()">显示全部</button>
+            </div>
+            <div id="rest-list">
+                <div class="empty-message">还没有餐厅，快去添加吧！🍽️</div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="map-container">
+        <div id="map"></div>
+        <!-- Geolocation button -->
+        <button id="locate-btn" onclick="locateMe()" title="定位到我的位置">
+            <span id="locate-icon">📍</span>
+        </button>
+        <!-- Radius menu: 4 options, selected one turns green -->
+        <div id="radius-menu" style="display:none;">
+            <button class="radius-opt" id="opt-10" onclick="setRadius(10)">附近10英里</button>
+            <button class="radius-opt" id="opt-5"  onclick="setRadius(5)">附近5英里</button>
+            <button class="radius-opt" id="opt-3"  onclick="setRadius(3)">附近3英里</button>
+            <button class="radius-opt active-radius" id="opt-1" onclick="setRadius(1)">附近1英里</button>
+        </div>
+    </div>
+</div>
+
+    <button id="restore-btn" onclick="restorePanel()">︿</button>
+    <button id="back-top-btn" onclick="scrollPanelTop()" title="回到顶部">︿</button>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script>
+    const firebaseConfig = {
+        apiKey:            "AIzaSyBdVhjxHyh2z4tJG7HyjtlfUREiXM6TFZ8",
+        authDomain:        "irvine-food-map-4fe48.firebaseapp.com",
+        projectId:         "irvine-food-map-4fe48",
+        storageBucket:     "irvine-food-map-4fe48.firebasestorage.app",
+        messagingSenderId: "231866601328",
+        appId:             "1:231866601328:web:87a379e69f57c46f4589b5D",
+        measurementId:     "G-YHFBNSQ8E4"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db  = firebase.firestore();
+    const COL = 'restaurants';
+
+    // ── Email login: whole app requires login ──
+    const auth = firebase.auth();
+    let currentUser = null;
+    let unsubData = null;
+
+    auth.onAuthStateChanged(user => {
+        currentUser = user;
+        document.body.classList.toggle('authed', !!user);
+        if (user) {
+            if (typeof map !== 'undefined' && map) startData();
+        } else {
+            if (unsubData) { unsubData(); unsubData = null; }
+        }
+    });
+
+    function login() {
+        const email = document.getElementById('login-email').value.trim();
+        const pass  = document.getElementById('login-pass').value;
+        const msg   = document.getElementById('login-msg');
+        const btn   = document.getElementById('login-btn');
+        if (!email || !pass) { msg.textContent = '请输入邮箱和密码'; return; }
+        btn.disabled = true; msg.textContent = '';
+        auth.signInWithEmailAndPassword(email, pass)
+            .catch(e => {
+                msg.textContent = (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found')
+                    ? '邮箱或密码错误' : '登录失败：' + e.code;
+            })
+            .finally(() => { btn.disabled = false; });
+    }
+    function forgotPassword() {
+        const email = document.getElementById('login-email').value.trim();
+        const msg   = document.getElementById('login-msg');
+        if (!email) { msg.textContent = '请先填写邮箱'; return; }
+        auth.sendPasswordResetEmail(email)
+            .then(() => { msg.style.color = '#2e7d32'; msg.textContent = '重置邮件已发送'; })
+            .catch(e => { msg.style.color = ''; msg.textContent = '发送失败：' + e.code; });
+    }
+    function logout() {
+        if (confirm('确定退出登录？')) auth.signOut().then(() => location.reload());
+    }
+</script>
+
+<!-- ② Need marker library for AdvancedMarkerElement -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBtOo-OFBLyLJOQoWXgxI_RPDansMHVs9w&libraries=places,marker&callback=initMap&v=beta" async defer></script>
+
+<script>
+    // ── State ──
+    let map, infoWindow, geocoder;
+    let markers = [];
+    let restaurants = [];
+    let geocodingTimeout = null;
+    let isEditing = false, editingId = null;
+    let formTags = new Set();
+
+    const activeCityFilters    = new Set();
+    const activeCuisineFilters = new Set();
+    const activeTagFilters     = new Set();
+    const allCuisines = new Set();
+    const allCities   = new Set();
+    const allTags     = new Set();
+
+    // Region groups (city names must match what Google geocoding returns)
+    const REGIONS = [
+        {
+            id: 'irvine-area', label: '尔湾区',
+            cities: ['Irvine','Santa Ana','Lake Forest','Tustin','Laguna Hills']
+        },
+        {
+            id: 'rowland-area', label: '罗兰岗区',
+            cities: ['Rowland Heights','City of Industry','Hacienda Heights','South San Jose Hills','West Covina','Walnut']
+        },
+        {
+            id: 'sgv-area', label: '圣盖博区',
+            cities: ['San Gabriel','Alhambra','Monterey Park','Rosemead','El Monte']
+        },
+    ];
+    // Which region chip is active (null = none)
+    let activeRegion = null;
+
+    // Single-restaurant list mode (set by clicking name in popup)
+    let singleId = null;
+
+    // Local / All scope (default: local)
+    let localScope = true;
+    // Bounding box for LA County + Orange County
+    const LOCAL_BOUNDS = { latMin: 33.38, latMax: 34.82, lngMin: -118.95, lngMax: -117.40 };
+    function isLocalRestaurant(r) {
+        return r.lat >= LOCAL_BOUNDS.latMin && r.lat <= LOCAL_BOUNDS.latMax &&
+               r.lng >= LOCAL_BOUNDS.lngMin && r.lng <= LOCAL_BOUNDS.lngMax;
+    }
+    function setScope(scope) {
+        localScope = (scope === 'local');
+        document.getElementById('scope-local').classList.toggle('active', localScope);
+        document.getElementById('scope-all').classList.toggle('active', !localScope);
+        applyFilters();
+    }
+
+    // Geolocation mode
+    let locationMode = false;     // true while filtering by proximity
+    let userLat = null, userLng = null;
+
+    // ── Tesla Supercharger ──
+    let teslaActive  = false;
+    let teslaMarkers = [];
+
+    const TSC_CACHE_KEY = 'tsc_cache_v4';
+
+    function loadTscCache() {
+        try { return JSON.parse(localStorage.getItem(TSC_CACHE_KEY) || '{}'); }
+        catch { return {}; }
+    }
+    function saveTscCache(c) {
+        try { localStorage.setItem(TSC_CACHE_KEY, JSON.stringify(c)); } catch {}
+    }
+
+    // Show a temporary message on the map (always visible, not in hidden form)
+    function showMapMsg(msg, isError) {
+        let el = document.getElementById('map-msg');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'map-msg';
+            el.style.cssText = `
+                position:absolute; bottom:80px; left:50%; transform:translateX(-50%);
+                background:${isError ? 'rgba(200,50,20,0.9)' : 'rgba(50,120,50,0.9)'};
+                color:white; padding:7px 18px; border-radius:20px;
+                font-size:0.85rem; font-weight:600; z-index:200;
+                white-space:nowrap; pointer-events:none;
+                box-shadow:0 2px 8px rgba(0,0,0,0.3);`;
+            document.getElementById('map-container').appendChild(el);
+        }
+        el.style.background = isError ? 'rgba(200,50,20,0.9)' : 'rgba(50,120,50,0.9)';
+        el.textContent = msg;
+        el.style.display = 'block';
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => { el.style.display = 'none'; }, 3000);
+    }
+
+    // Search Tesla Superchargers in current map viewport center
+    async function searchTscInViewport() {
+        const center = map.getCenter();
+        const lat = center.lat(), lng = center.lng();
+        const cacheKey = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+        const cache = loadTscCache();
+
+        if (cache[cacheKey] !== undefined) return cache[cacheKey];
+
+        const { places } = await google.maps.places.Place.searchByText({
+            textQuery: 'Tesla Supercharger',
+            fields: ['displayName', 'location', 'formattedAddress'],
+            locationBias: { center: { lat, lng }, radius: 40000 }, // 25 miles
+            maxResultCount: 20
+        });
+
+        const data = [];
+        (places || []).forEach(p => {
+            const n = (p.displayName || '').toLowerCase();
+            if (!n.includes('destination')) {
+                data.push({
+                    lat:      p.location.lat(),
+                    lng:      p.location.lng(),
+                    name:     p.displayName || 'Tesla Supercharger',
+                    vicinity: p.formattedAddress || ''
+                });
+            }
+        });
+
+        cache[cacheKey] = data;
+        saveTscCache(cache);
+        return data;
+    }
+
+    function renderTeslaMarkers(stations) {
+        teslaMarkers.forEach(m => { try { m.map = null; } catch {} });
+        teslaMarkers = [];
+        stations.forEach(s => {
+            const el = document.createElement('div');
+            el.style.cssText = 'font-size:20px;cursor:pointer;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.4))';
+            el.textContent = '⚡';
+            let marker;
+            try {
+                marker = new google.maps.marker.AdvancedMarkerElement({
+                    position: { lat: s.lat, lng: s.lng }, map,
+                    content: el, title: s.name, zIndex: 5
+                });
+            } catch {
+                marker = new google.maps.Marker({
+                    position: { lat: s.lat, lng: s.lng }, map, title: s.name
+                });
+            }
+            const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(s.name + ' ' + s.vicinity)}`;
+            marker.addListener('click', () => {
+                infoWindow.setContent(`
+                    <div class="info-window-content">
+                        <h4 style="color:#f0ad00;">⚡ ${escHtml(s.name)}</h4>
+                        <p>📍 <a class="iw-nav" href="${mapsUrl}" target="_blank" rel="noopener">${escHtml(s.vicinity)}</a></p>
+                    </div>`);
+                infoWindow.open(map, marker);
+            });
+            teslaMarkers.push(marker);
+        });
+    }
+
+    async function toggleTesla() {
+        const btn = document.getElementById('tesla-btn');
+        teslaActive = !teslaActive;
+        btn.classList.toggle('active', teslaActive);
+
+        if (!teslaActive) {
+            teslaMarkers.forEach(m => { try { m.map = null; } catch {} });
+            teslaMarkers = [];
+            return;
+        }
+
+        btn.textContent = '⏳';
+        try {
+            const stations = await searchTscInViewport();
+            if (!stations.length) {
+                showMapMsg('附近未找到特斯拉超充站', true);
+            } else {
+                showMapMsg(`找到 ${stations.length} 个超充站 ⚡`, false);
+            }
+            renderTeslaMarkers(stations);
+        } catch(e) {
+            console.error('Tesla error:', e);
+            showMapMsg('搜索失败：' + (e.message || '请重试'), true);
+            teslaActive = false;
+            btn.classList.remove('active');
+        }
+        btn.textContent = '⚡';
+    }
+
+    async function refreshTscIfNeeded() {
+        if (!teslaActive) return;
+        try {
+            const stations = await searchTscInViewport();
+            renderTeslaMarkers(stations);
+        } catch(e) { console.warn('Tesla refresh error:', e); }
+    }
+
+    // ③ Recent tags (last 5 used), persisted in localStorage
+    let recentTags = JSON.parse(localStorage.getItem('recentTags') || '[]');
+
+    // ② Cuisine → flag emoji
+    const CUISINE_FLAG = {
+        '中餐':'🇨🇳','川菜':'🇨🇳','粤菜':'🇨🇳','火锅':'🇨🇳','湘菜':'🇨🇳','东北菜':'🇨🇳','上海菜':'🇨🇳',
+        '日料':'🇯🇵','寿司':'🇯🇵','拉面':'🇯🇵','日本':'🇯🇵',
+        '韩餐':'🇰🇷','韩国':'🇰🇷','部队锅':'🇰🇷','烧烤':'🇰🇷',
+        '越南菜':'🇻🇳','越南':'🇻🇳','泰餐':'🇹🇭','泰国':'🇹🇭',
+        '美式':'🇺🇸','汉堡':'🇺🇸','美国':'🇺🇸','美餐':'🇺🇸',
+        '奶茶':'🧋','珍珠奶茶':'🧋',
+        '咖啡':'☕','cafe':'☕',
+        '甜点':'🍰','甜品':'🍰',
+    };
+    const CUISINE_MAP = {
+        '中餐':'c-chinese','川菜':'c-chinese','粤菜':'c-chinese','火锅':'c-chinese','湘菜':'c-chinese','东北菜':'c-chinese',
+        '日料':'c-japanese','寿司':'c-japanese','拉面':'c-japanese',
+        '韩餐':'c-korean','烧烤':'c-korean','部队锅':'c-korean',
+        '越南菜':'c-vietnamese',
+        '泰餐':'c-other','美式':'c-other','墨西哥':'c-other','意式':'c-other',
+    };
+    function cuisineFlag(c) {
+        if (!c) return '🍽️';
+        const cl = c.toLowerCase();
+        for (const k of Object.keys(CUISINE_FLAG)) if (c.includes(k) || cl.includes(k.toLowerCase())) return CUISINE_FLAG[k];
+        return '🍽️';
+    }
+    function cuisineClass(c) {
+        if (!c) return 'c-other';
+        for (const k of Object.keys(CUISINE_MAP)) if (c.includes(k)) return CUISINE_MAP[k];
+        return 'c-other';
+    }
+
+    // ── Util ──
+    function escHtml(str) {
+        if (str == null) return '';
+        const d = document.createElement('div');
+        d.appendChild(document.createTextNode(String(str)));
+        return d.innerHTML;
+    }
+    function showStatus(msg, type) {
+        const el = document.getElementById('add-status');
+        el.textContent = msg; el.className = 'status-msg ' + type;
+        setTimeout(() => { el.className = 'status-msg'; }, 3500);
+    }
+
+    // ⑥ Toggle form collapse
+    function toggleForm() {
+        const body = document.getElementById('form-body');
+        const icon = document.getElementById('toggle-icon');
+        const open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : 'block';
+        icon.classList.toggle('open', !open);
+    }
+
+    // ── Init Map ──
+    function initMap() {
+        map = new google.maps.Map(document.getElementById('map'), {
+            center: { lat: 33.65, lng: -117.83 }, zoom: 11,
+            mapId: 'DEMO_MAP_ID'
+        });
+        infoWindow = new google.maps.InfoWindow({ maxWidth: 240 });
+        geocoder   = new google.maps.Geocoder();
+        map.addListener('click', () => infoWindow.close());
+        hookZoomSpread();
+
+        if (currentUser) startData();
+    }
+
+    function startData() {
+        if (unsubData) return;
+        unsubData = db.collection(COL).onSnapshot(snapshot => {
+            restaurants = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            syncFilterData();
+            updateFilterChips();
+            applyFilters(true);
+        }, err => {
+            showStatus('⚠️ 无法连接数据库，请检查 Firebase 配置。', 'error');
+            console.error(err);
+        });
+    }
+
+    // ── Form Tags ──
+    function addTagToForm() {
+        const input = document.getElementById('add-tag-input');
+        const val = input.value.trim().replace(/^#/, '');
+        if (!val) return;
+        formTags.add(val);
+        input.value = '';
+        // ③ Update recent tags
+        recentTags = [val, ...recentTags.filter(t => t !== val)].slice(0, 5);
+        localStorage.setItem('recentTags', JSON.stringify(recentTags));
+        updateTagDatalist();
+        renderFormTags();
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('add-tag-input').addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); addTagToForm(); }
+        });
+        updateTagDatalist();
+    });
+    // ③ Populate tag datalist: all tags from Firebase (allTags), recent ones first
+    function updateTagDatalist() {
+        const dl = document.getElementById('tag-suggestions');
+        if (!dl) return;
+        dl.innerHTML = '';
+        // Recent first, then the rest from allTags not already in recent
+        const recent = recentTags.filter(t => t);
+        const others = Array.from(allTags).sort().filter(t => !recent.includes(t));
+        [...recent, ...others].forEach(t => {
+            const o = document.createElement('option'); o.value = t; dl.appendChild(o);
+        });
+    }
+    function renderFormTags() {
+        const c = document.getElementById('form-current-tags');
+        c.innerHTML = '';
+        formTags.forEach(tag => {
+            const el = document.createElement('span');
+            el.className = 'tag-chip';
+            el.innerHTML = `${escHtml(tag)} <button class="remove-tag" onclick="removeFormTag('${escHtml(tag)}')">×</button>`;
+            c.appendChild(el);
+        });
+    }
+    function removeFormTag(tag) { formTags.delete(tag); renderFormTags(); }
+
+    // ── Submit ──
+    function submitForm() {
+        const name    = document.getElementById('add-name').value.trim();
+        const address = document.getElementById('add-address').value.trim();
+        const cuisine = document.getElementById('add-cuisine').value.trim();
+        const note    = document.getElementById('add-note').value.trim();
+        const tags    = Array.from(formTags);
+
+        if (!name || !address || !cuisine) {
+            showStatus('请填写餐厅名称、地址和类型！', 'error'); return;
+        }
+        const loader = document.getElementById('add-loader');
+        loader.classList.add('visible');
+
+        if (geocodingTimeout) clearTimeout(geocodingTimeout);
+        geocodingTimeout = setTimeout(() => {
+            geocoder.geocode({ address }, (results, status) => {
+                loader.classList.remove('visible');
+                if (status === 'OK' && results[0]) {
+                    const loc = results[0].geometry.location;
+                    const cityComp = results[0].address_components.find(c =>
+                        c.types.includes('locality') || c.types.includes('administrative_area_level_1'));
+                    const city = cityComp ? cityComp.long_name : '未知城市';
+                    const data = { name, address, cuisine, city, tags, note, lat: loc.lat(), lng: loc.lng() };
+
+                    // Track recently used cuisines (keep last 5)
+                    let rc = JSON.parse(localStorage.getItem('recentCuisines') || '[]');
+                    rc = [cuisine, ...rc.filter(c => c !== cuisine)].slice(0, 5);
+                    localStorage.setItem('recentCuisines', JSON.stringify(rc));
+
+                    const action = isEditing
+                        ? db.collection(COL).doc(editingId).set(data)
+                        : db.collection(COL).add(data);
+                    action
+                        .then(() => {
+                            showStatus(isEditing ? '✅ 更新成功！' : '✅ 添加成功！', 'success');
+                            clearForm();
+                            refreshTscIfNeeded();
+                        })
+                        .catch(e => showStatus(e.code === 'permission-denied' ? '没有权限，请先登录。' : '保存失败，请重试。', 'error'));
+                } else {
+                    showStatus('地址解析失败，请检查地址格式。', 'error');
+                }
+            });
+        }, 400);
+    }
+
+    function clearForm() {
+        ['add-name','add-address','add-cuisine','add-note'].forEach(id => document.getElementById(id).value = '');
+        formTags.clear(); renderFormTags();
+        isEditing = false; editingId = null;
+        document.getElementById('form-title').textContent = '➕ 添加餐厅';
+        const btn = document.getElementById('submit-btn');
+        btn.textContent = '📍 添加到地图'; btn.classList.remove('editing');
+        document.getElementById('cancel-btn').style.display = 'none';
+        // Collapse form after clearing
+        const body = document.getElementById('form-body');
+        const icon = document.getElementById('toggle-icon');
+        body.style.display = 'none'; icon.classList.remove('open');
+    }
+
+    // ── Delete / Edit ──
+    function deleteRestaurant(id) {
+        if (!confirm('确定要删除这个餐厅吗？')) return;
+        db.collection(COL).doc(id).delete().catch(e => alert(e.code === 'permission-denied' ? '没有权限删除' : '删除失败'));
+        if (isEditing && editingId === id) clearForm();
+    }
+    function editRestaurant(id) {
+        const r = restaurants.find(r => r.id === id); if (!r) return;
+        // Expand form
+        const body = document.getElementById('form-body');
+        const icon = document.getElementById('toggle-icon');
+        body.style.display = 'block'; icon.classList.add('open');
+
+        document.getElementById('add-name').value    = r.name;
+        document.getElementById('add-address').value = r.address;
+        document.getElementById('add-cuisine').value = r.cuisine;
+        document.getElementById('add-note').value    = r.note || '';
+        formTags = new Set(r.tags || []); renderFormTags();
+        isEditing = true; editingId = id;
+        document.getElementById('form-title').textContent = '✏️ 编辑餐厅';
+        const btn = document.getElementById('submit-btn');
+        btn.textContent = '💾 保存更改'; btn.classList.add('editing');
+        document.getElementById('cancel-btn').style.display = 'block';
+        document.querySelector('.left-panel').scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── Filters ──
+    function syncFilterData() {
+        allCuisines.clear(); allCities.clear(); allTags.clear();
+        restaurants.forEach(r => {
+            if (r.cuisine) allCuisines.add(r.cuisine);
+            if (r.city)    allCities.add(r.city);
+            if (r.tags)    r.tags.forEach(t => allTags.add(t));
+        });
+    }
+    function chip(type, value, label, active) {
+        return `<div class="chip${active?' active':''}" data-filter-type="${type}" data-filter-value="${escHtml(value)}" onclick="selectFilter(this)">${escHtml(label)}</div>`;
+    }
+    function regionChip(regionId, label, active) {
+        return `<div class="chip region-chip${active?' active':''}" data-filter-type="region" data-filter-value="${escHtml(regionId)}" onclick="selectFilter(this)">${escHtml(label)}</div>`;
+    }
+    function updateFilterChips() {
+        const cityEl = document.getElementById('city-filters');
+        // 全部
+        let html = chip('city','all','全部', activeCityFilters.size===0 && !activeRegion);
+        // Region chips (after 全部, before individual cities)
+        REGIONS.forEach(r => html += regionChip(r.id, r.label, activeRegion === r.id));
+        // Individual cities (sorted)
+        Array.from(allCities).sort().forEach(c => html += chip('city', c, c, activeCityFilters.has(c)));
+        cityEl.innerHTML = html;
+
+        const cuisineEl = document.getElementById('cuisine-filters');
+        html = chip('cuisine','all','全部', activeCuisineFilters.size===0);
+        Array.from(allCuisines).sort().forEach(c => html += chip('cuisine',c,c, activeCuisineFilters.has(c)));
+        cuisineEl.innerHTML = html;
+
+        const tagEl = document.getElementById('tag-filters');
+        html = chip('tag','all','全部', activeTagFilters.size===0);
+        Array.from(allTags).sort().forEach(t => html += chip('tag',t,t, activeTagFilters.has(t)));
+        tagEl.innerHTML = html;
+
+        // Cuisine datalist: recent first, then rest alphabetically
+        const dl = document.getElementById('cuisine-suggestions');
+        dl.innerHTML = '';
+        const recentCuisines = JSON.parse(localStorage.getItem('recentCuisines') || '[]');
+        const others = Array.from(allCuisines).sort().filter(v => !recentCuisines.includes(v));
+        [...recentCuisines.filter(c => allCuisines.has(c)), ...others].forEach(v => {
+            const o = document.createElement('option'); o.value = v; dl.appendChild(o);
+        });
+        updateTagDatalist();
+    }
+    function selectFilter(el) {
+        const type  = el.dataset.filterType;
+        const value = el.dataset.filterValue;
+
+        // Clicking any city / region chip exits location mode
+        if (type === 'city' || type === 'region') {
+            if (locationMode) {
+                locationMode = false; userLat = null; userLng = null;
+                const btn  = document.getElementById('locate-btn');
+                const menu = document.getElementById('radius-menu');
+                if (btn)  btn.classList.remove('active','loading');
+                if (menu) menu.style.display = 'none';
+                hideRadiusOptions();
+            }
+        }
+
+        if (type === 'region') {
+            // Toggle region: selecting same one deactivates it
+            if (activeRegion === value) {
+                activeRegion = null;
+                activeCityFilters.clear();
+            } else {
+                activeRegion = value;
+                activeCityFilters.clear();
+                // Load the region's cities into activeCityFilters
+                const region = REGIONS.find(r => r.id === value);
+                if (region) region.cities.forEach(c => activeCityFilters.add(c));
+            }
+        } else if (type === 'city') {
+            // Selecting an individual city clears any active region
+            activeRegion = null;
+            if (value === 'all') { activeCityFilters.clear(); }
+            else { activeCityFilters.has(value) ? activeCityFilters.delete(value) : activeCityFilters.add(value); }
+        } else {
+            const set = type==='cuisine' ? activeCuisineFilters : activeTagFilters;
+            if (value === 'all') { set.clear(); }
+            else { set.has(value) ? set.delete(value) : set.add(value); }
+        }
+        updateFilterChips(); applyFilters();
+    }
+    function clearAllFilters() {
+        activeCityFilters.clear(); activeCuisineFilters.clear(); activeTagFilters.clear();
+        activeRegion = null;
+        document.getElementById('manual-search').value = '';
+        document.getElementById('name-search').value = '';
+        updateFilterChips(); applyFilters();
+    }
+
+    function applyFilters(keepSingle) {
+        if (keepSingle !== true) singleId = null;
+        const manualQ = (document.getElementById('manual-search')?.value || '').trim().toLowerCase();
+        const nameQ   = (document.getElementById('name-search')?.value || '').trim().toLowerCase();
+        const hasCuisine = activeCuisineFilters.size > 0;
+        const hasTag     = activeTagFilters.size > 0;
+
+        const filtered = restaurants.filter(r => {
+            // Local scope: only LA County + Orange County
+            if (localScope && !locationMode && !isLocalRestaurant(r)) return false;
+
+            // Location mode: only show restaurants within radius of user
+            if (locationMode && userLat !== null) {
+                const km = haversineKm(userLat, userLng, r.lat, r.lng);
+                if (km > activeRadiusMiles * KM_PER_MILE) return false;
+            }
+
+            const cityOk = !locationMode
+                ? (activeCityFilters.size===0 || activeCityFilters.has(r.city))
+                : true; // city filter inactive while in location mode
+
+            let contentOk;
+            if (!hasCuisine && !hasTag) {
+                contentOk = true;
+            } else if (hasCuisine && !hasTag) {
+                contentOk = activeCuisineFilters.has(r.cuisine);
+            } else if (!hasCuisine && hasTag) {
+                contentOk = Array.from(activeTagFilters).some(t => r.tags && r.tags.includes(t));
+            } else {
+                contentOk = activeCuisineFilters.has(r.cuisine) ||
+                            Array.from(activeTagFilters).some(t => r.tags && r.tags.includes(t));
+            }
+
+            const nameOk   = !nameQ   || (r.name && r.name.toLowerCase().includes(nameQ));
+            const manualOk = !manualQ || [r.name||'', r.note||'', (r.tags||[]).join(' ')]
+                                          .some(s => s.toLowerCase().includes(manualQ));
+            return cityOk && contentOk && nameOk && manualOk;
+        });
+        const single = singleId && restaurants.find(r => r.id === singleId);
+        if (singleId && !single) singleId = null;   // deleted
+        renderList(single ? [single] : filtered);
+        renderMarkers(filtered);
+        if (locationMode && userLat !== null) zoomToRadius(filtered);
+    }
+
+    // ── Render List ──
+    function renderList(filtered) {
+        const c = document.getElementById('rest-list');
+        document.getElementById('list-title').textContent = `🗒️ 餐厅列表 (${filtered.length})`;
+        const bar = document.getElementById('single-bar');
+        bar.classList.toggle('visible', !!singleId);
+        if (singleId && filtered[0]) document.getElementById('single-bar-text').textContent = `只显示：${filtered[0].name}`;
+        if (!filtered.length) { c.innerHTML = '<div class="empty-message">没有符合条件的餐厅 😕</div>'; return; }
+
+        c.innerHTML = filtered.map(r => {
+            const cls = cuisineClass(r.cuisine);
+            // ④ Use name + address for more accurate navigation
+            const mapsUrl  = `https://maps.google.com/?q=${encodeURIComponent(r.name + ' ' + r.address)}`;
+            const tagsHtml = r.tags && r.tags.length
+                ? `<div class="tags-row">${r.tags.map(t=>`<span class="tag-small">${escHtml(t)}</span>`).join('')}</div>` : '';
+            const noteHtml = r.note ? `<div class="note-text">📝 ${escHtml(r.note)}</div>` : '';
+            return `
+                <div class="rest-card" data-id="${r.id}" onclick="focusMarker('${r.id}')">
+                    <div class="card-actions">
+                        <button class="card-btn edit" onclick="event.stopPropagation();editRestaurant('${r.id}')">✏️</button>
+                        <button class="card-btn del"  onclick="event.stopPropagation();deleteRestaurant('${r.id}')">🗑️</button>
+                    </div>
+                    <div class="name">${escHtml(r.name)}</div>
+                    <div class="meta">📍 <a class="nav-link" href="${mapsUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(r.address)}</a></div>
+                    <div class="meta">🏙️ ${escHtml(r.city)}</div>
+                    <span class="tag-cuisine ${cls}">${escHtml(r.cuisine)}</span>
+                    ${tagsHtml}${noteHtml}
+                </div>`;
+        }).join('');
+    }
+
+    // ── Render Markers ── (flag emoji + name label, auto-position to avoid overlap)
+    function formatMarkerName(name) {
+        if (!name) return '';
+        const CJK = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
+        const line = s => `<span style="display:block;white-space:nowrap">${s}</span>`;
+
+        // Helper: break an English string into ≤14-char whole-word chunks
+        function breakEnglish(str) {
+            const words = str.split(/\s+/);
+            const chunks = []; let cur = '';
+            words.forEach(w => {
+                const candidate = cur ? cur + ' ' + w : w;
+                if (candidate.length > 14 && cur) { chunks.push(cur); cur = w; }
+                else cur = candidate;
+            });
+            if (cur) chunks.push(cur);
+            return chunks;
+        }
+
+        if (!CJK.test(name)) {
+            return breakEnglish(name).map(line).join('');
+        }
+
+        // Mixed Chinese + English: split on first whitespace
+        const spaceIdx = name.search(/\s/);
+        let chinesePart = name, englishPart = '';
+        if (spaceIdx > 0) {
+            chinesePart = name.substring(0, spaceIdx).trim();
+            englishPart = name.substring(spaceIdx + 1).trim();
+        }
+
+        // English lines, used to decide how many Chinese chars fit per line
+        const engLines = englishPart ? breakEnglish(englishPart) : [];
+        // Widest English chunk (char count)
+        const maxEngLen = engLines.reduce((mx, l) => Math.max(mx, l.length), 0);
+        // Equiv Chinese chars: English char ≈ 0.55× Chinese char width
+        const charsPerLine = Math.max(5, Math.round(maxEngLen * 0.55));
+
+        const lines = [];
+        for (let i = 0; i < chinesePart.length; i += charsPerLine) {
+            lines.push(line(escHtml(chinesePart.substring(i, i + charsPerLine))));
+        }
+        engLines.forEach(l => lines.push(line(escHtml(l))));
+        return lines.join('');
+    }
+
+    // Fix 2: only use left/right — east marker → label right, west marker → label left
+    function computeLabelPositions(filtered) {
+        const THRESH = 0.004;
+        const result = {};
+        filtered.forEach(r => result[r.id] = 'right');
+
+        for (let i = 0; i < filtered.length; i++) {
+            for (let j = i + 1; j < filtered.length; j++) {
+                const a = filtered[i], b = filtered[j];
+                if (Math.abs(a.lat - b.lat) < THRESH && Math.abs(a.lng - b.lng) < THRESH) {
+                    // More-east (higher lng) keeps label on right; more-west gets left
+                    result[a.id] = a.lng >= b.lng ? 'right' : 'left';
+                    result[b.id] = a.lng >= b.lng ? 'left'  : 'right';
+                }
+            }
+        }
+        return result;
+    }
+
+    function renderMarkers(filtered) {
+        markers.forEach(m => { try { m.map = null; } catch(e) {} }); markers = [];
+        if (!filtered.length) return;
+
+        const bounds   = new google.maps.LatLngBounds();
+        const labelPos = computeLabelPositions(filtered);
+
+        filtered.forEach(r => {
+            const pos     = { lat: r.lat, lng: r.lng };
+            const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(r.name + ' ' + r.address)}`;
+            const flag    = cuisineFlag(r.cuisine);
+            const dir     = labelPos[r.id];
+
+            const el = document.createElement('div');
+            el.className = `custom-marker${dir !== 'right' ? ' lbl-' + dir : ''}`;
+            el.innerHTML = `<span class="flag">${flag}</span><span class="mname">${formatMarkerName(r.name)}</span>`;
+
+            let marker;
+            try {
+                marker = new google.maps.marker.AdvancedMarkerElement({
+                    position: pos, map, content: el, title: r.name
+                });
+            } catch(e) {
+                marker = new google.maps.Marker({ position: pos, map, title: r.name });
+            }
+            marker._id  = r.id;
+            marker._lat = r.lat;
+            marker._lng = r.lng;
+            marker.addListener('click', () => openInfoWindow(marker, r, mapsUrl));
+
+            markers.push(marker);
+            bounds.extend(pos);
+        });
+
+        // In location mode, keep the map centered on user — don't fitBounds to markers
+        if (!locationMode) {
+            map.fitBounds(bounds);
+            google.maps.event.addListenerOnce(map, 'idle', () => {
+                if (map.getZoom() > 13) map.setZoom(13);
+                applyMarkerSpread();
+            });
+        } else {
+            applyMarkerSpread();
+        }
+    }
+
+    function scrollPanelTop() {
+        const panel = document.getElementById('left-panel');
+        if (panel) panel.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Show back-to-top button when panel scrolled down > 80px
+    document.addEventListener('DOMContentLoaded', () => {
+        const panel = document.getElementById('left-panel');
+        const btn   = document.getElementById('back-top-btn');
+        if (panel && btn) {
+            panel.addEventListener('scroll', () => {
+                btn.classList.toggle('visible', panel.scrollTop > 80);
+            }, { passive: true });
+        }
+    });
+
+    // ③ Panel collapse / restore (mobile only)
+    function collapsePanel() {
+        const panel = document.getElementById('left-panel');
+        const btn   = document.getElementById('restore-btn');
+        if (!panel) return;
+        panel.classList.add('collapsed');
+        if (btn) btn.classList.add('visible');
+    }
+    function restorePanel() {
+        const panel = document.getElementById('left-panel');
+        const btn   = document.getElementById('restore-btn');
+        if (!panel) return;
+        panel.classList.remove('collapsed');
+        if (btn) btn.classList.remove('visible');
+    }
+
+    // Swipe-down on drag handle to collapse
+    (function() {
+        const handle = document.getElementById('panel-handle');
+        if (!handle) return;
+        let startY = null;
+        handle.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
+        handle.addEventListener('touchend',   e => {
+            if (startY === null) return;
+            const dy = e.changedTouches[0].clientY - startY;
+            if (dy > 30) collapsePanel();   // swipe down → collapse
+            else if (dy < -30) restorePanel(); // swipe up → restore
+            startY = null;
+        }, { passive: true });
+        // Also allow tap on handle to toggle
+        handle.addEventListener('click', () => {
+            const panel = document.getElementById('left-panel');
+            if (panel.classList.contains('collapsed')) restorePanel();
+            else collapsePanel();
+        });
+    })();
+    // Converts lat/lng → pixel at the current map zoom using Mercator projection
+    // ── Geolocation ──
+    let activeRadiusMiles = 1; // default 1 mile
+    const KM_PER_MILE = 1.60934;
+
+    function haversineKm(lat1, lng1, lat2, lng2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 +
+                  Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function locateMe() {
+        if (!navigator.geolocation) { alert('您的浏览器不支持定位功能。'); return; }
+        const btn  = document.getElementById('locate-btn');
+        const menu = document.getElementById('radius-menu');
+
+        // Already active: hide menu and exit location mode
+        if (locationMode) {
+            locationMode = false; userLat = null; userLng = null;
+            btn.classList.remove('active', 'loading');
+            menu.style.display = 'none';
+            applyFilters();
+            return;
+        }
+
+        btn.classList.add('loading');
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                userLat = pos.coords.latitude;
+                userLng = pos.coords.longitude;
+                locationMode = true;
+                activeRadiusMiles = 1;
+                btn.classList.remove('loading'); btn.classList.add('active');
+                menu.style.display = 'flex';
+                updateActiveRadiusLabel();
+                zoomToRadius();
+                applyFilters();
+            },
+            err => {
+                btn.classList.remove('loading');
+                alert('无法获取位置：' + (err.message || '请检查定位权限'));
+            },
+            { enableHighAccuracy: true, timeout: 8000 }
+        );
+    }
+
+    function zoomToRadius(filtered) {
+        if (!userLat) return;
+        const bounds = new google.maps.LatLngBounds();
+        bounds.extend({ lat: userLat, lng: userLng });
+        if (filtered && filtered.length) {
+            filtered.forEach(r => { if (r.lat && r.lng) bounds.extend({ lat: r.lat, lng: r.lng }); });
+        }
+        map.fitBounds(bounds, 20);
+        // Don't zoom in too close, don't zoom out too far
+        const maxZoom = { 1: 15, 3: 15, 5: 14, 10: 13 };
+        google.maps.event.addListenerOnce(map, 'idle', () => {
+            const max = maxZoom[activeRadiusMiles] || 12;
+            if (map.getZoom() > max) map.setZoom(max);
+        });
+    }
+
+    function setRadius(miles) {
+        activeRadiusMiles = miles;
+        updateActiveRadiusLabel();
+        zoomToRadius();
+        applyFilters();
+    }
+    function updateActiveRadiusLabel() {
+        [1, 3, 5, 10].forEach(m => {
+            const b = document.getElementById('opt-' + m);
+            if (!b) return;
+            if (m === activeRadiusMiles) b.classList.add('active-radius');
+            else b.classList.remove('active-radius');
+        });
+    }
+
+    function latLngToPixel(lat, lng) {
+        const scale = Math.pow(2, map.getZoom()) * 256;
+        const siny  = Math.min(Math.max(Math.sin(lat * Math.PI / 180), -0.9999), 0.9999);
+        return {
+            x: scale * (lng / 360 + 0.5),
+            y: scale * (0.5 - Math.log((1 + siny) / (1 - siny)) / (4 * Math.PI))
+        };
+    }
+
+    function applyMarkerSpread() {
+        if (!markers.length) return;
+        // Just enough to stop icon overlap (~18px emoji), with 4px breathing room
+        const PIXEL_THRESH = 26;
+
+        markers.forEach(m => {
+            if (m.content) m.content.style.transform = '';
+        });
+
+        for (let i = 0; i < markers.length; i++) {
+            for (let j = i + 1; j < markers.length; j++) {
+                const mi = markers[i], mj = markers[j];
+                const pi = latLngToPixel(mi._lat, mi._lng);
+                const pj = latLngToPixel(mj._lat, mj._lng);
+                const dx = pi.x - pj.x;
+                const dy = pi.y - pj.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < PIXEL_THRESH && dist > 0) {
+                    // Push by minimum amount — just enough to separate, no more
+                    const push  = (PIXEL_THRESH - dist) / 2 + 2;
+                    const angle = Math.atan2(dy, dx);
+                    const ox    = Math.cos(angle) * push;
+                    const oy    = Math.sin(angle) * push;
+                    if (mi.content) mi.content.style.transform = `translate(${ox}px, ${oy}px)`;
+                    if (mj.content) mj.content.style.transform = `translate(${-ox}px, ${-oy}px)`;
+                }
+            }
+        }
+    }
+
+    // Re-spread whenever the user zooms
+    function hookZoomSpread() {
+        map.addListener('zoom_changed', () => {
+            // Small delay so zoom animation finishes before we recalculate pixels
+            setTimeout(applyMarkerSpread, 300);
+        });
+    }
+
+    function openInfoWindow(marker, r, mapsUrl) {
+        infoWindow.setContent(`
+            <div class="info-window-content">
+                <h4 style="cursor:pointer;text-decoration:underline dotted;" onclick="scrollToCard('${r.id}')" title="在列表中找到此餐厅">${escHtml(r.name)}</h4>
+                <p>📍 <a class="iw-nav" href="${mapsUrl}" target="_blank" rel="noopener">${escHtml(r.address)}</a></p>
+                <p>🏙️ ${escHtml(r.city)}</p>
+                <p>🍽️ ${escHtml(r.cuisine)}</p>
+                ${r.tags&&r.tags.length?`<p>🏷️ ${r.tags.map(t=>escHtml(t)).join(' · ')}</p>`:''}
+                ${r.note?`<p>📝 ${escHtml(r.note)}</p>`:''}
+            </div>`);
+        infoWindow.open(map, marker);
+    }
+
+    // Click name in popup → list shows only this restaurant (map unchanged)
+    function scrollToCard(id) {
+        infoWindow.close();
+        const r = restaurants.find(r => r.id === id);
+        if (!r) return;
+        singleId = id;
+        renderList([r]);
+        restorePanel();
+        const panel = document.querySelector('.left-panel');
+        const section = document.querySelector('.restaurant-list-section');
+        if (panel && section) {
+            const top = panel.scrollTop + section.getBoundingClientRect().top - panel.getBoundingClientRect().top - 8;
+            panel.scrollTo({ top, behavior: 'smooth' });
+        }
+        const card = document.querySelector(`.rest-card[data-id="${id}"]`);
+        if (card) {
+            card.style.transition = 'box-shadow 0.2s, outline 0.2s';
+            card.style.outline = '2.5px solid #e8472a';
+            card.style.boxShadow = '0 0 0 4px rgba(232,71,42,0.2)';
+            setTimeout(() => { card.style.outline = ''; card.style.boxShadow = ''; }, 1800);
+        }
+    }
+
+    function exitSingle() {
+        singleId = null;
+        applyFilters();
+    }
+
+    function focusMarker(id) {
+        const m = markers.find(m => m._id === id);
+        if (m) { openInfoWindow(m, restaurants.find(r=>r.id===id), `https://maps.google.com/?q=${encodeURIComponent((restaurants.find(r=>r.id===id)?.name||'')+' '+(restaurants.find(r=>r.id===id)?.address||''))}`); map.panTo(m.position || m.getPosition()); }
+    }
+</script>
+</body>
+</html>
