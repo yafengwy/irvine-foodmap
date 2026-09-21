@@ -595,7 +595,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">1.0</span>
+    <span id="app-ver">1.1</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
@@ -726,6 +726,13 @@
                 <div id="city-filters" class="chip-group">
                     <div class="chip active" data-filter-type="city" data-filter-value="all" onclick="selectFilter(this)">全部</div>
                 </div>
+            </div>
+
+            <!-- 外地 (collapsed by default) -->
+            <div class="filter-group" id="away-group" style="display:none;">
+                <h3 id="away-head" onclick="toggleAway()" style="cursor:pointer;">✈️ 外地 <span id="away-arrow" style="color:#aaa;font-size:0.8rem;">▸</span>
+                    <span id="away-sum" style="color:#aaa;font-size:0.78rem;font-weight:400;"></span></h3>
+                <div id="away-filters" class="chip-group" style="display:none;"></div>
             </div>
             <div class="filter-group">
                 <h3>🍽️ 菜系 <span style="color:#aaa;font-size:0.78rem;font-weight:400;">（可多选）</span></h3>
@@ -874,6 +881,30 @@
     // Which region chip is active (null = none)
     let activeRegion = null;
 
+    // 外地 regions: restaurants auto-assigned by distance from center (not by city name)
+    const AWAY_REGIONS = [
+        { id: 'sea', label: '西雅图区',   lat: 47.61, lng: -122.33, km: 60 },
+        { id: 'van', label: '温哥华区',   lat: 49.25, lng: -123.10, km: 50 },
+        { id: 'lv',  label: '拉斯维加斯', lat: 36.17, lng: -115.14, km: 40 },
+    ];
+    let activeAway = null;
+    let awayOpen = false;
+    function awayRegionOf(r) {
+        if (!r.lat || !r.lng || isLocalRestaurant(r)) return null;
+        const g = AWAY_REGIONS.find(a => haversineKm(a.lat, a.lng, r.lat, r.lng) <= a.km);
+        return g ? g.id : null;
+    }
+    function toggleAway() {
+        awayOpen = !awayOpen;
+        document.getElementById('away-filters').style.display = awayOpen ? 'flex' : 'none';
+        document.getElementById('away-arrow').textContent = awayOpen ? '▾' : '▸';
+    }
+    function setScopeQuiet(local) {
+        localScope = local;
+        document.getElementById('scope-local').classList.toggle('active', localScope);
+        document.getElementById('scope-all').classList.toggle('active', !localScope);
+    }
+
     // City chip order: most recently clicked first (reorders immediately)
     let citiesJumpTop = false;
     function rememberCities(list) {
@@ -905,6 +936,7 @@
     }
     function setScope(scope) {
         localScope = (scope === 'local');
+        if (localScope && activeAway) { activeAway = null; updateFilterChips(); }
         document.getElementById('scope-local').classList.toggle('active', localScope);
         document.getElementById('scope-all').classList.toggle('active', !localScope);
         applyFilters();
@@ -1275,7 +1307,7 @@
         allCuisines.clear(); allCities.clear(); allTags.clear();
         restaurants.forEach(r => {
             if (r.cuisine) allCuisines.add(r.cuisine);
-            if (r.city)    allCities.add(r.city);
+            if (r.city && !awayRegionOf(r)) allCities.add(r.city);   // 外地区域的城市不进城市框
             if (r.tags)    r.tags.forEach(t => allTags.add(t));
         });
     }
@@ -1288,7 +1320,7 @@
     function updateFilterChips() {
         const cityEl = document.getElementById('city-filters');
         // 全部
-        let html = chip('city','all','全部', activeCityFilters.size===0 && !activeRegion);
+        let html = chip('city','all','全部', activeCityFilters.size===0 && !activeRegion && !activeAway);
         // Region chips (after 全部, before individual cities)
         REGIONS.forEach(r => html += regionChip(r.id, r.label, activeRegion === r.id));
         // Individual cities (sorted)
@@ -1302,6 +1334,15 @@
         if (tops.length > 4) cityEl.style.maxHeight = (tops[4] - tops[0] + 6 + 8) + 'px';
         if (citiesJumpTop) { cityEl.scrollTop = 0; citiesJumpTop = false; }
         else cityEl.scrollTop = keepScroll;
+
+        // 外地 chips with counts
+        const counts = {};
+        restaurants.forEach(r => { const a = awayRegionOf(r); if (a) counts[a] = (counts[a] || 0) + 1; });
+        const used = AWAY_REGIONS.filter(a => counts[a.id]);
+        document.getElementById('away-group').style.display = used.length ? '' : 'none';
+        document.getElementById('away-sum').textContent = used.length ? `（${used.length} 个区）` : '';
+        document.getElementById('away-filters').innerHTML = used.map(a =>
+            `<div class="chip region-chip${activeAway === a.id ? ' active' : ''}" data-filter-type="away" data-filter-value="${a.id}" onclick="selectFilter(this)">${a.label} <span style="opacity:.7;font-size:0.72rem">${counts[a.id]}</span></div>`).join('');
 
         const cuisineEl = document.getElementById('cuisine-filters');
         html = chip('cuisine','all','全部', activeCuisineFilters.size===0);
@@ -1328,7 +1369,7 @@
         const value = el.dataset.filterValue;
 
         // Clicking any city / region chip exits location mode
-        if (type === 'city' || type === 'region') {
+        if (type === 'city' || type === 'region' || type === 'away') {
             if (locationMode) {
                 locationMode = false; userLat = null; userLng = null;
                 const btn  = document.getElementById('locate-btn');
@@ -1339,7 +1380,12 @@
             }
         }
 
-        if (type === 'region') {
+        if (type === 'away') {
+            activeRegion = null; activeCityFilters.clear();
+            if (activeAway === value) activeAway = null;
+            else { activeAway = value; setScopeQuiet(false); }
+        } else if (type === 'region') {
+            activeAway = null;
             // Toggle region: selecting same one deactivates it
             if (activeRegion === value) {
                 activeRegion = null;
@@ -1357,7 +1403,10 @@
             }
         } else if (type === 'city') {
             // Selecting an individual city clears any active region
-            activeRegion = null;
+            activeRegion = null; activeAway = null;
+            // A city with only non-local restaurants (not yet in any 外地区): switch to 全部 so it shows
+            if (value !== 'all' && !activeCityFilters.has(value) &&
+                !restaurants.some(r => r.city === value && isLocalRestaurant(r))) setScopeQuiet(false);
             if (value === 'all') { activeCityFilters.clear(); }
             else {
                 if (activeCityFilters.has(value)) activeCityFilters.delete(value);
@@ -1372,7 +1421,7 @@
     }
     function clearAllFilters() {
         activeCityFilters.clear(); activeCuisineFilters.clear(); activeTagFilters.clear();
-        activeRegion = null;
+        activeRegion = null; activeAway = null;
         document.getElementById('name-search').value = '';
         updateFilterChips(); applyFilters();
     }
@@ -1388,6 +1437,10 @@
         const hasTag     = activeTagFilters.size > 0;
 
         const filtered = restaurants.filter(r => {
+            // 外地 region selected: only that region (ignores scope and city filters)
+            if (activeAway && !locationMode) {
+                if (awayRegionOf(r) !== activeAway) return false;
+            } else
             // Local scope: only LA County + Orange County
             if (localScope && !locationMode && !isLocalRestaurant(r)) return false;
 
@@ -1397,7 +1450,7 @@
                 if (km > activeRadiusMiles * KM_PER_MILE) return false;
             }
 
-            const cityOk = !locationMode
+            const cityOk = (!locationMode && !activeAway)
                 ? (activeCityFilters.size===0 || activeCityFilters.has(r.city))
                 : true; // city filter inactive while in location mode
 
