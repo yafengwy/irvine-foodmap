@@ -1801,6 +1801,9 @@
     async function gpost(url, body, fieldMask) {
         const res = await fetch(url, {
             method: 'POST',
+            // Send the full page URL as Referer (browser default sends only the domain,
+            // which doesn't match the key's ".../irvine-foodmap/*" website restriction)
+            referrerPolicy: 'no-referrer-when-downgrade',
             headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': API_KEY, 'X-Goog-FieldMask': fieldMask },
             body: JSON.stringify(body)
         });
