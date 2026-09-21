@@ -384,6 +384,9 @@ input.row-select { direction: ltr; }
 .rule-group .n { flex: 1; font-weight: 600; font-size: 15px; }
 .rule-group .ms { color: var(--sub); }
 
+.rule-hits { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; background: #FFF6E5; }
+.rule-hits > .meta { padding: 0 4px; color: #8A5A00; }
+
 </style>
 <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
 </head>
@@ -517,7 +520,7 @@ const fns = getFunctions(fb);
 const call = (name) => httpsCallable(fns, name, { timeout: 540000 });
 
 const APP_NAME = 'Finance Track';
-const APP_VERSION = '7.5';
+const APP_VERSION = '7.6';
 const $ = (id) => document.getElementById(id);
 const S = {
   user: null, cats: {}, accounts: {}, items: {}, labels: {}, filters: {}, rules: {}, txs: [], txById: {},
@@ -1902,7 +1905,7 @@ function renderEdit() {
       <div class="set-item">${glyph('calendar_today', '#FF3B30')}<span class="n">Date</span>
         ${e.manual ? `<input id="ed-date" type="date" class="row-date" value="${e.date}">` : `<span class="v">${shortDate(e.date)}${t.pending ? ' (pending)' : ''}</span>`}</div>
       ${t ? valueRow('ed-split', glyph('call_split', '#5856D6'), 'Split', t.parentId ? `Part ${t.splitIdx + 1} of ${t.splitN}` : 'None') : ''}
-      ${t && !t.manual ? valueRow('ed-rule', glyph('bolt', '#FF9500'), 'Create rule', esc(`Auto-sort “${kwSuggest(t)[0] || 'this merchant'}”`)) : ''}
+      ${t && !t.manual ? (() => { const n = ruleList().filter((r) => ruleMatches(r, t)).length; return valueRow('ed-rule', glyph('bolt', '#FF9500'), 'Create rule', esc(n ? `${n} rule${n === 1 ? '' : 's'} match` : `Auto-sort “${kwSuggest(t)[0] || 'this merchant'}”`)); })() : ''}
     </div>
     ${t && !e.manual && !e.part && e.type !== 'transfer' ? `<label class="check"><input type="checkbox" id="same-merchant" ${S.sameMerchant ? 'checked' : ''}>Also apply the category to other uncategorized records from this merchant</label>` : ''}
     <div class="sec-head">Labels</div>${labelChips(e.labels, '')}
@@ -2092,7 +2095,7 @@ function kwSuggest(t) {
 function sheetRuleFromTx(txId, e) {
   const t = S.txById[txId]; if (!t) return;
   const sug = kwSuggest(t);
-  S.ruleDraft = { id: null, field: 'description', kw: sug[0] ? [sug[0]] : [], kwInput: '', accountId: null, onlyAcc: t.accountId || null, suggestions: sug,
+  S.ruleDraft = { id: null, fromTx: txId, field: 'description', kw: sug[0] ? [sug[0]] : [], kwInput: '', accountId: null, onlyAcc: t.accountId || null, suggestions: sug,
     categoryId: (e ? e.categoryId : t.categoryId) || null, labelId: (e ? e.labels : t.labels || [])[0] || null, transfer: e ? e.type === 'transfer' : !!t.isTransfer, applyPast: true, overwrite: false,
     amtMode: 'any', amtA: Math.abs(t.amount).toFixed(2), amtB: '' };
   renderRule();
@@ -2133,7 +2136,13 @@ function refreshRuleCounts() {
 }
 function renderRule() {
   const d = S.ruleDraft; const c = S.cats[d.categoryId]; const l = S.labels[d.labelId]; const a = S.accounts[d.accountId];
+  // Opened from a record: say which existing rules already match it (tap one to open it)
+  const src = d.fromTx && !d.id ? S.txById[d.fromTx] : null;
+  const hits = src ? ruleList().filter((r) => ruleMatches(r, src)) : [];
+  const hitHtml = hits.length ? `<div class="rule-hits"><div class="meta">This record already matches ${hits.length === 1 ? 'a rule' : `${hits.length} rules`}. Tap to view, or create a new one below.</div>
+    <div class="set-list">${hits.map((r) => { const t = ruleText(r); const c = S.cats[r.categoryId]; return `<button class="set-item" data-act="edit-rule" data-id="${r.id}">${c ? catIcon(c) : glyph(r.transfer ? 'swap_horiz' : 'sell', '#8E8E93')}<span class="n">${esc(t.cond)}<div class="meta">${esc(t.acts)}</div></span>${icon('chevron_right')}</button>`; }).join('')}</div></div>` : '';
   openSheet(`<h3>${d.id ? 'Edit rule' : 'New rule'}</h3>
+    ${hitHtml}
     <div class="sec-head">When</div>
     <div class="set-list">
       ${valueRow('ru-field', glyph(d.field === 'account' ? 'credit_card' : 'text_fields', '#3478F6'), 'Match by', d.field === 'account' ? 'Account' : 'Description')}
