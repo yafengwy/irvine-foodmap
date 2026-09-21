@@ -1908,7 +1908,7 @@
         } catch (e) {
             const m = String(e.message || e);
             if (e.status === 403 || /not been used|disabled|API_KEY|blocked/i.test(m))
-                rtProgress('⚠️ Google API 还没开通或 key 没授权（Routes API / Places API）');
+                rtProgress('⚠️ Google API 还没开通或 key 没授权：' + m.slice(0, 160));
             else rtProgress('⚠️ ' + m);
             console.error(e);
         } finally { go.disabled = false; }
