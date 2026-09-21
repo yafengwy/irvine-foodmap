@@ -706,14 +706,6 @@
                 </div>
             </h2>
 
-            <!-- ⑨ Manual search -->
-            <div class="filter-group">
-                <div class="search-row">
-                    <label>手动搜索</label>
-                    <input type="text" id="manual-search" placeholder="名称 / 标签 / 备注…" oninput="applyFilters()">
-                </div>
-            </div>
-
             <div class="filter-group">
                 <h3>🏙️ 城市 <span style="color:#aaa;font-size:0.78rem;font-weight:400;">（可多选）</span></h3>
                 <div id="city-filters" class="chip-group">
@@ -739,7 +731,7 @@
             <h2 id="list-title">🗒️ 餐厅列表 (0)</h2>
             <!-- ⑦ Name search -->
             <div class="list-search">
-                <input type="text" id="name-search" placeholder="🔎 搜索餐厅名称…" oninput="applyFilters()">
+                <input type="text" id="name-search" placeholder="🔎 搜索名称 / 标签 / 备注…" oninput="applyFilters()">
             </div>
             <div id="route-bar"></div>
             <div id="single-bar">
@@ -1366,7 +1358,6 @@
     function clearAllFilters() {
         activeCityFilters.clear(); activeCuisineFilters.clear(); activeTagFilters.clear();
         activeRegion = null;
-        document.getElementById('manual-search').value = '';
         document.getElementById('name-search').value = '';
         updateFilterChips(); applyFilters();
     }
@@ -1377,7 +1368,6 @@
             clearRoute();                      // any filter action exits route mode
         }
         if (keepSingle !== true) singleId = null;
-        const manualQ = (document.getElementById('manual-search')?.value || '').trim().toLowerCase();
         const nameQ   = (document.getElementById('name-search')?.value || '').trim().toLowerCase();
         const hasCuisine = activeCuisineFilters.size > 0;
         const hasTag     = activeTagFilters.size > 0;
@@ -1408,10 +1398,9 @@
                             Array.from(activeTagFilters).some(t => r.tags && r.tags.includes(t));
             }
 
-            const nameOk   = !nameQ   || (r.name && r.name.toLowerCase().includes(nameQ));
-            const manualOk = !manualQ || [r.name||'', r.note||'', (r.tags||[]).join(' ')]
-                                          .some(s => s.toLowerCase().includes(manualQ));
-            return cityOk && contentOk && nameOk && manualOk;
+            const nameOk   = !nameQ || [r.name||'', r.note||'', (r.tags||[]).join(' ')]
+                                        .some(s => s.toLowerCase().includes(nameQ));
+            return cityOk && contentOk && nameOk;
         });
         const single = singleId && restaurants.find(r => r.id === singleId);
         if (singleId && !single) singleId = null;   // deleted
