@@ -595,7 +595,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">1.2</span>
+    <span id="app-ver">1.4</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
@@ -615,6 +615,11 @@
         <div class="rt-label">终点</div>
         <div class="dd-wrap rt-ac">
             <input class="rt-input" id="rt-to" placeholder="e.g. Vancouver, BC" autocomplete="off">
+            <div class="dd-menu"></div>
+        </div>
+        <div class="rt-label">途经 <span style="font-weight:400;color:#aaa;">（可选，多算一条经过这里的路线，如 Bellevue）</span></div>
+        <div class="dd-wrap rt-ac">
+            <input class="rt-input" id="rt-via" placeholder="e.g. Bellevue, WA" autocomplete="off">
             <div class="dd-menu"></div>
         </div>
         <div class="rt-label">最多绕路</div>
@@ -1947,14 +1952,31 @@
                 origin = { location: { latLng: { latitude: h.lat, longitude: h.lng } } };
             }
             rtProgress('正在计算路线…');
-            const data = await gpost('https://routes.googleapis.com/directions/v2:computeRoutes', {
-                origin, destination: toEl.dataset.placeId ? { placeId: toEl.dataset.placeId } : { address: toTxt },
-                travelMode: 'DRIVE', routingPreference: 'TRAFFIC_AWARE',
-                computeAlternativeRoutes: true, languageCode: 'zh-CN'
-            }, 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.description');
+            const destination = toEl.dataset.placeId ? { placeId: toEl.dataset.placeId } : { address: toTxt };
+            const FM = 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.description';
+            const base = { origin, destination, travelMode: 'DRIVE', routingPreference: 'TRAFFIC_AWARE', languageCode: 'zh-CN' };
+            const data = await gpost('https://routes.googleapis.com/directions/v2:computeRoutes',
+                { ...base, computeAlternativeRoutes: true }, FM);
             if (!data.routes || !data.routes.length) throw new Error('找不到路线，请检查起点和终点');
+            let list = data.routes.slice(0, 3);
 
-            const routes = data.routes.slice(0, 3).map(r => {
+            // Optional 途经: one extra route forced through that point (Google often returns only 1 route)
+            const viaEl = document.getElementById('rt-via'), viaTxt = viaEl.value.trim();
+            if (viaTxt) {
+                try {
+                    const v = await gpost('https://routes.googleapis.com/directions/v2:computeRoutes', {
+                        ...base, intermediates: [{ via: true, ...(viaEl.dataset.placeId ? { placeId: viaEl.dataset.placeId } : { address: viaTxt }) }]
+                    }, FM);
+                    const vr = v.routes && v.routes[0];
+                    // keep it unless it's essentially the same as an existing route
+                    if (vr && !list.some(r => Math.abs(r.distanceMeters - vr.distanceMeters) < 300)) {
+                        vr.description = '经 ' + viaTxt.split(',')[0];
+                        list.push(vr);
+                    }
+                } catch (e) { console.error(e); showMapMsg('⚠️ 途经路线计算失败', true); }
+            }
+
+            const routes = list.map(r => {
                 const path = decodePolyline(r.polyline.encodedPolyline);
                 return { ...r, path, cum: cumulative(path) };
             });
@@ -2064,7 +2086,7 @@
 
         renderRouteBar(shown.length);
         renderRouteList(shown);
-        restorePanel();
+        // Keep panel as the user left it (collapsed = full map)
     }
 
     function renderRouteBar(n) {
@@ -2216,6 +2238,7 @@
     }
     setupPlaceAC(document.getElementById('rt-from'), true);
     setupPlaceAC(document.getElementById('rt-to'), false);
+    setupPlaceAC(document.getElementById('rt-via'), false);
 
     function clearRoute() {
         routeState = null;
