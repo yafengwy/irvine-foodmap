@@ -451,7 +451,75 @@
             display: none; position: fixed; inset: 0; z-index: 9000;
             background: rgba(0,0,0,0.45); align-items: center; justify-content: center; padding: 16px;
         }
-        #form-modal.open { display: flex; }
+        #form-modal.open, #route-modal.open { display: flex; }
+        #route-btn {
+            margin-left: auto; width: 36px; height: 36px; border-radius: 50%;
+            background: rgba(255,255,255,0.25); color: white; border: 1.5px solid rgba(255,255,255,0.7);
+            font-size: 1.1rem; line-height: 1; cursor: pointer; display: flex;
+            align-items: center; justify-content: center; padding: 0;
+        }
+        #route-btn + #add-btn { margin-left: 8px; }
+        #route-modal {
+            display: none; position: fixed; inset: 0; z-index: 9000;
+            background: rgba(0,0,0,0.45); align-items: center; justify-content: center; padding: 16px;
+        }
+        .rt-label { font-size: 0.85rem; font-weight: 600; color: #555; margin: 10px 0 5px; }
+        .rt-input {
+            width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+            font-size: 1rem; font-family: inherit;
+        }
+        .rt-seg { display: flex; gap: 6px; flex-wrap: wrap; }
+        .rt-seg button {
+            flex: 1; padding: 8px 0; border: 1.5px solid #e8472a; background: white; color: #e8472a;
+            border-radius: 16px; font-size: 0.85rem; cursor: pointer;
+        }
+        .rt-seg button.active { background: #e8472a; color: white; }
+        .rt-toggle { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.9rem; color: #444; }
+        .rt-toggle input { width: 18px; height: 18px; accent-color: #e8472a; }
+        .rt-go {
+            width: 100%; margin-top: 16px; padding: 12px; border: none; border-radius: 10px;
+            background: linear-gradient(135deg, #f07f3c, #e8472a); color: white;
+            font-size: 1rem; font-weight: 700; cursor: pointer;
+        }
+        .rt-go:disabled { opacity: 0.6; }
+        .rt-cancel {
+            width: 100%; margin-top: 8px; padding: 11px; border: none; border-radius: 10px;
+            background: #f0f0f0; color: #555; font-size: 0.95rem; cursor: pointer;
+        }
+        #rt-progress { font-size: 0.85rem; color: #e8472a; text-align: center; margin-top: 10px; min-height: 1.2em; }
+
+        /* Route results bar (above list) */
+        #route-bar {
+            display: none; background: #eef5ff; border: 1px solid #b9d3f5; border-radius: 10px;
+            padding: 8px 10px; margin-bottom: 8px; font-size: 0.82rem; color: #1a4f8b;
+        }
+        #route-bar.visible { display: block; }
+        #route-bar .rb-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        #route-bar .rb-exit {
+            background: #1a73e8; color: white; border: none; border-radius: 12px;
+            padding: 3px 10px; font-size: 0.78rem; cursor: pointer; white-space: nowrap;
+        }
+        #route-bar .rb-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+        #route-bar .rb-chip {
+            border: 1.5px solid #1a73e8; background: white; color: #1a73e8; border-radius: 14px;
+            padding: 3px 10px; font-size: 0.78rem; cursor: pointer;
+        }
+        #route-bar .rb-chip.active { background: #1a73e8; color: white; }
+        .detour-badge {
+            display: inline-block; background: #e8f5e9; color: #2e7d32; border-radius: 10px;
+            padding: 2px 8px; font-size: 0.75rem; font-weight: 600; margin: 4px 6px 4px 0;
+        }
+        .detour-badge.mid { background: #fff8e1; color: #b26a00; }
+        .detour-badge.far { background: #fdecea; color: #c62828; }
+        .g-badge {
+            display: inline-block; background: #eef5ff; color: #1a73e8; border-radius: 10px;
+            padding: 2px 8px; font-size: 0.72rem; font-weight: 600; margin-right: 6px;
+        }
+        .g-save-btn {
+            background: #e8472a; color: white; border: none; border-radius: 12px;
+            padding: 3px 10px; font-size: 0.75rem; cursor: pointer; margin-top: 4px;
+        }
+        .custom-marker.g-marker .mname { background: #eef5ff; color: #1a4f8b; }
         /* Custom dropdown (菜式 / 标签) — native datalist doesn't work in iPhone home-screen app */
         .dd-wrap { position: relative; margin-bottom: 14px; }
         .tag-input-group .dd-wrap { flex: 1; margin-bottom: 0; }
@@ -519,9 +587,42 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
+    <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
 <div id="ptr-indicator">↓ 下拉刷新</div>
+<!-- Route dialog -->
+<div id="route-modal" onclick="if(event.target===this)closeRouteModal()">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h2>🧭 沿途找餐厅</h2>
+            <button class="modal-close" onclick="closeRouteModal()">✕</button>
+        </div>
+        <div class="rt-label">起点</div>
+        <input class="rt-input" id="rt-from" placeholder="留空 = 当前位置" autocomplete="off">
+        <div class="rt-label">终点</div>
+        <input class="rt-input" id="rt-to" placeholder="e.g. Vancouver, BC" autocomplete="off">
+        <div class="rt-label">最多绕路</div>
+        <div class="rt-seg" id="rt-limit">
+            <button data-min="5">5 分钟</button>
+            <button data-min="10" class="active">10 分钟</button>
+            <button data-min="15">15 分钟</button>
+            <button data-min="20">20 分钟</button>
+        </div>
+        <label class="rt-toggle">
+            <input type="checkbox" id="rt-google" onchange="document.getElementById('rt-kw-wrap').style.display=this.checked?'block':'none'">
+            同时搜索沿途 Google 上的餐厅
+        </label>
+        <div id="rt-kw-wrap" style="display:none;">
+            <div class="rt-label">搜索关键词</div>
+            <input class="rt-input" id="rt-kw" placeholder="默认：restaurant（可填 奶茶 / ramen / 火锅…）" autocomplete="off">
+        </div>
+        <button class="rt-go" id="rt-go" onclick="runRoute()">🧭 查找沿途餐厅</button>
+        <button class="rt-cancel" onclick="closeRouteModal()">取消</button>
+        <div id="rt-progress"></div>
+    </div>
+</div>
+
 <!-- Add / Edit restaurant dialog -->
 <div id="form-modal" onclick="if(event.target===this)clearForm()">
     <div class="modal-box">
@@ -640,6 +741,7 @@
             <div class="list-search">
                 <input type="text" id="name-search" placeholder="🔎 搜索餐厅名称…" oninput="applyFilters()">
             </div>
+            <div id="route-bar"></div>
             <div id="single-bar">
                 <span id="single-bar-text"></span>
                 <button onclick="exitSingle()">显示全部</button>
@@ -802,6 +904,8 @@
     }
 
     // Geolocation mode
+    let routeState = null;   // route mode: { routes, sel, limit, cands, useGoogle, kw }
+    let routeLines = [], gMarkers = [];
     let locationMode = false;     // true while filtering by proximity
     let userLat = null, userLng = null;
 
@@ -1268,6 +1372,10 @@
     }
 
     function applyFilters(keepSingle) {
+        if (routeState) {
+            if (keepSingle === true) return;   // data refresh while in route mode: keep route view
+            clearRoute();                      // any filter action exits route mode
+        }
         if (keepSingle !== true) singleId = null;
         const manualQ = (document.getElementById('manual-search')?.value || '').trim().toLowerCase();
         const nameQ   = (document.getElementById('name-search')?.value || '').trim().toLowerCase();
@@ -1652,6 +1760,7 @@
         infoWindow.close();
         const r = restaurants.find(r => r.id === id);
         if (!r) return;
+        if (routeState) { highlightCard(id); return; }
         singleId = id;
         renderList([r]);
         restorePanel();
@@ -1674,6 +1783,332 @@
         singleId = null;
         applyFilters();
     }
+
+    // ═══════════════ 沿途找餐厅 (Route mode) ═══════════════
+    const API_KEY = new URL(document.querySelector('script[src*="maps/api/js"]').src).searchParams.get('key');
+
+    document.querySelectorAll('#rt-limit button').forEach(b => b.addEventListener('click', () => {
+        document.querySelectorAll('#rt-limit button').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+    }));
+
+    function openRouteModal() {
+        document.getElementById('rt-progress').textContent = '';
+        document.getElementById('route-modal').classList.add('open');
+    }
+    function closeRouteModal() { document.getElementById('route-modal').classList.remove('open'); }
+    function rtProgress(t) { document.getElementById('rt-progress').textContent = t; }
+
+    async function gpost(url, body, fieldMask) {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': API_KEY, 'X-Goog-FieldMask': fieldMask },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const msg = (data.error && data.error.message) || res.status;
+            const e = new Error(msg); e.status = res.status; throw e;
+        }
+        return data;
+    }
+
+    function getHere() {
+        return new Promise((ok, fail) => navigator.geolocation
+            ? navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude }),
+                () => fail(new Error('无法获取当前位置，请填写起点')), { enableHighAccuracy: true, timeout: 8000 })
+            : fail(new Error('无法获取当前位置，请填写起点')));
+    }
+
+    // Encoded polyline → [{lat,lng}]
+    function decodePolyline(str) {
+        let i = 0, lat = 0, lng = 0; const out = [];
+        while (i < str.length) {
+            for (const k of [0, 1]) {
+                let b, shift = 0, result = 0;
+                do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+                const d = (result & 1) ? ~(result >> 1) : (result >> 1);
+                if (k === 0) lat += d; else lng += d;
+            }
+            out.push({ lat: lat / 1e5, lng: lng / 1e5 });
+        }
+        return out;
+    }
+
+    // Nearest point on route: distance (m), along-route distance (m), projected point
+    function nearestOnRoute(path, cum, p) {
+        const kx = 111320 * Math.cos(p.lat * Math.PI / 180), ky = 110540;
+        let best = { d: Infinity };
+        for (let i = 0; i < path.length - 1; i++) {
+            const a = path[i], b = path[i + 1];
+            const ax = (a.lng - p.lng) * kx, ay = (a.lat - p.lat) * ky;
+            const bx = (b.lng - p.lng) * kx, by = (b.lat - p.lat) * ky;
+            const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+            let t = L2 ? -(ax * dx + ay * dy) / L2 : 0; t = Math.max(0, Math.min(1, t));
+            const x = ax + t * dx, y = ay + t * dy, d = Math.hypot(x, y);
+            if (d < best.d) best = { d, along: cum[i] + t * (cum[i + 1] - cum[i]),
+                pt: { lat: a.lat + t * (b.lat - a.lat), lng: a.lng + t * (b.lng - a.lng) } };
+        }
+        return best;
+    }
+    function cumulative(path) {
+        const cum = [0];
+        for (let i = 1; i < path.length; i++) {
+            const a = path[i - 1], b = path[i];
+            const kx = 111320 * Math.cos(a.lat * Math.PI / 180);
+            cum.push(cum[i - 1] + Math.hypot((b.lng - a.lng) * kx, (b.lat - a.lat) * 110540));
+        }
+        return cum;
+    }
+
+    const fmtMi  = m => (m / 1609.34 < 10 ? (m / 1609.34).toFixed(1) : Math.round(m / 1609.34)) + ' mi';
+    const fmtDur = s => { const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return h ? `${h}小时${m}分` : `${m}分钟`; };
+    const secs   = d => parseInt(d || '0', 10);
+
+    const CORRIDOR_M = 8000;     // pre-filter: within ~5 miles of the route
+    const MAX_SAVED = 25, MAX_GOOGLE = 20;
+
+    async function runRoute() {
+        const fromTxt = document.getElementById('rt-from').value.trim();
+        const toTxt   = document.getElementById('rt-to').value.trim();
+        if (!toTxt) { rtProgress('请填写终点'); return; }
+        const limit     = +document.querySelector('#rt-limit button.active').dataset.min;
+        const useGoogle = document.getElementById('rt-google').checked;
+        const kw        = document.getElementById('rt-kw').value.trim() || 'restaurant';
+        const go = document.getElementById('rt-go'); go.disabled = true;
+
+        try {
+            let origin;
+            if (fromTxt) origin = { address: fromTxt };
+            else {
+                rtProgress('正在获取当前位置…');
+                const h = await getHere();
+                origin = { location: { latLng: { latitude: h.lat, longitude: h.lng } } };
+            }
+            rtProgress('正在计算路线…');
+            const data = await gpost('https://routes.googleapis.com/directions/v2:computeRoutes', {
+                origin, destination: { address: toTxt },
+                travelMode: 'DRIVE', routingPreference: 'TRAFFIC_AWARE',
+                computeAlternativeRoutes: true, languageCode: 'zh-CN'
+            }, 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.description');
+            if (!data.routes || !data.routes.length) throw new Error('找不到路线，请检查起点和终点');
+
+            const routes = data.routes.slice(0, 3).map(r => {
+                const path = decodePolyline(r.polyline.encodedPolyline);
+                return { ...r, path, cum: cumulative(path) };
+            });
+
+            // Exit other modes, enter route mode
+            if (singleId) singleId = null;
+            clearRoute();
+            routeState = { routes, sel: 0, limit, useGoogle, kw, cands: {} };
+            await computeCandidates(0);
+            closeRouteModal();
+            showRoute();
+        } catch (e) {
+            const m = String(e.message || e);
+            if (e.status === 403 || /not been used|disabled|API_KEY|blocked/i.test(m))
+                rtProgress('⚠️ Google API 还没开通或 key 没授权（Routes API / Places API）');
+            else rtProgress('⚠️ ' + m);
+            console.error(e);
+        } finally { go.disabled = false; }
+    }
+
+    // Find restaurants near route #idx and compute real detour times (cached per route)
+    async function computeCandidates(idx) {
+        if (routeState.cands[idx]) return;
+        const rt = routeState.routes[idx];
+        let list = [];
+
+        // 1) Saved restaurants near the corridor
+        restaurants.filter(r => r.lat && r.lng).forEach(r => {
+            const n = nearestOnRoute(rt.path, rt.cum, { lat: r.lat, lng: r.lng });
+            if (n.d <= CORRIDOR_M) list.push({ kind: 'saved', id: r.id, r, lat: r.lat, lng: r.lng, name: r.name, ...n });
+        });
+        list.sort((a, b) => a.d - b.d); list = list.slice(0, MAX_SAVED);
+
+        // 2) Optional: Google places along the route
+        if (routeState.useGoogle) {
+            rtProgress('正在搜索沿途餐厅…');
+            try {
+                const g = await gpost('https://places.googleapis.com/v1/places:searchText', {
+                    textQuery: routeState.kw, maxResultCount: MAX_GOOGLE,
+                    searchAlongRouteParameters: { polyline: { encodedPolyline: rt.polyline.encodedPolyline } }
+                }, 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.primaryTypeDisplayName');
+                (g.places || []).forEach(pl => {
+                    const p = { lat: pl.location.latitude, lng: pl.location.longitude };
+                    const name = pl.displayName ? pl.displayName.text : '';
+                    // skip ones already saved (same spot)
+                    if (restaurants.some(r => Math.abs(r.lat - p.lat) < 0.0008 && Math.abs(r.lng - p.lng) < 0.0008)) return;
+                    const n = nearestOnRoute(rt.path, rt.cum, p);
+                    list.push({ kind: 'google', id: 'g_' + pl.id, name, address: pl.formattedAddress || '',
+                        rating: pl.rating, count: pl.userRatingCount,
+                        type: pl.primaryTypeDisplayName ? pl.primaryTypeDisplayName.text : '', ...p, ...n });
+                });
+            } catch (e) { console.error(e); showMapMsg('⚠️ 沿途 Google 搜索失败', true); }
+        }
+
+        // 3) Real drive time (with live traffic) from nearest route point → restaurant; detour ≈ ×2
+        rtProgress(`正在计算绕路时间（${list.length} 家）…`);
+        await Promise.all(list.map(async c => {
+            try {
+                const m = await gpost('https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix', {
+                    origins: [{ waypoint: { location: { latLng: { latitude: c.pt.lat, longitude: c.pt.lng } } } }],
+                    destinations: [{ waypoint: { location: { latLng: { latitude: c.lat, longitude: c.lng } } } }],
+                    travelMode: 'DRIVE', routingPreference: 'TRAFFIC_AWARE'
+                }, 'originIndex,destinationIndex,duration,distanceMeters,condition');
+                const el = Array.isArray(m) ? m[0] : null;
+                c.detourMin = el && el.duration ? Math.round(secs(el.duration) * 2 / 60) : null;
+            } catch (e) { c.detourMin = null; console.error(e); }
+        }));
+        // Fallback when drive time unavailable: rough estimate from straight distance (~30 mph)
+        list.forEach(c => { if (c.detourMin == null) { c.detourMin = Math.round(c.d * 1.4 * 2 / 13.4 / 60); c.estimated = true; } });
+        list.sort((a, b) => a.along - b.along);
+        routeState.cands[idx] = list;
+        rtProgress('');
+    }
+
+    function showRoute() {
+        const st = routeState, rt = st.routes[st.sel];
+        // Lines: selected route blue & thick, alternatives grey & clickable
+        routeLines.forEach(l => l.setMap(null)); routeLines = [];
+        st.routes.forEach((r, i) => {
+            const line = new google.maps.Polyline({
+                path: r.path, map,
+                strokeColor: i === st.sel ? '#1a73e8' : '#9aa0a6',
+                strokeOpacity: i === st.sel ? 0.9 : 0.7, strokeWeight: i === st.sel ? 6 : 4,
+                zIndex: i === st.sel ? 2 : 1, clickable: i !== st.sel
+            });
+            if (i !== st.sel) line.addListener('click', () => selectRoute(i));
+            routeLines.push(line);
+        });
+
+        const shown = st.cands[st.sel].filter(c => c.detourMin <= st.limit);
+        const saved = shown.filter(c => c.kind === 'saved').map(c => c.r);
+
+        // Markers: saved ones use normal markers; Google ones get blue-label markers
+        renderMarkers(saved);
+        gMarkers.forEach(m => { try { m.map = null; } catch (e) {} }); gMarkers = [];
+        shown.filter(c => c.kind === 'google').forEach(c => {
+            const el = document.createElement('div');
+            el.className = 'custom-marker g-marker';
+            el.innerHTML = `<span class="flag">📍</span><span class="mname">${formatMarkerName(c.name)}</span>`;
+            const mk = new google.maps.marker.AdvancedMarkerElement({ position: { lat: c.lat, lng: c.lng }, map, content: el, title: c.name });
+            mk._id = c.id;
+            mk.addListener('click', () => openGoogleInfo(mk, c));
+            gMarkers.push(mk);
+        });
+        const b = new google.maps.LatLngBounds(); rt.path.forEach(p => b.extend(p));
+        map.fitBounds(b);
+
+        renderRouteBar(shown.length);
+        renderRouteList(shown);
+        restorePanel();
+    }
+
+    function renderRouteBar(n) {
+        const st = routeState, rt = st.routes[st.sel];
+        const routeChips = st.routes.length > 1 ? `<div class="rb-row">${st.routes.map((r, i) =>
+            `<button class="rb-chip${i === st.sel ? ' active' : ''}" onclick="selectRoute(${i})">${escHtml(r.description || '路线' + (i + 1))} · ${fmtDur(secs(r.duration))}</button>`).join('')}</div>` : '';
+        const limitChips = `<div class="rb-row">${[5, 10, 15, 20].map(m =>
+            `<button class="rb-chip${m === st.limit ? ' active' : ''}" onclick="setRouteLimit(${m})">≤${m}分钟</button>`).join('')}</div>`;
+        const bar = document.getElementById('route-bar');
+        bar.innerHTML = `
+            <div class="rb-top">
+                <span>🧭 ${escHtml(rt.description || '')} · ${fmtMi(rt.distanceMeters)} · ${fmtDur(secs(rt.duration))} · 沿途 <b>${n}</b> 家</span>
+                <button class="rb-exit" onclick="exitRoute()">退出路线</button>
+            </div>${routeChips}${limitChips}`;
+        bar.classList.add('visible');
+        document.getElementById('list-title').textContent = `🧭 沿途餐厅 (${n})`;
+        document.getElementById('single-bar').classList.remove('visible');
+    }
+
+    function renderRouteList(shown) {
+        const c = document.getElementById('rest-list');
+        if (!shown.length) {
+            c.innerHTML = `<div class="empty-message">这条路线 ${routeState.limit} 分钟绕路内没有餐厅 😕<br>试试放宽绕路时间${routeState.useGoogle ? '' : '，或打开 Google 搜索'}</div>`;
+            return;
+        }
+        c.innerHTML = shown.map(x => {
+            const cls = x.detourMin <= 5 ? '' : x.detourMin <= 12 ? ' mid' : ' far';
+            const badge = `<span class="detour-badge${cls}">🚗 绕路约 ${x.detourMin} 分钟${x.estimated ? '（估算）' : ''}</span><span class="meta" style="display:inline">距起点 ${fmtMi(x.along)}</span>`;
+            if (x.kind === 'saved') {
+                const r = x.r;
+                const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(r.name + ' ' + r.address)}`;
+                return `
+                <div class="rest-card" data-id="${r.id}" onclick="focusMarker('${r.id}')">
+                    <div class="name">${escHtml(r.name)}</div>
+                    ${badge}
+                    <div class="meta">📍 <a class="nav-link" href="${mapsUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(r.address)}</a></div>
+                    <span class="tag-cuisine ${cuisineClass(r.cuisine)}">${escHtml(r.cuisine)}</span>
+                </div>`;
+            }
+            const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(x.name + ' ' + x.address)}`;
+            const rating = x.rating ? ` · ⭐ ${x.rating}${x.count ? ` (${x.count})` : ''}` : '';
+            return `
+                <div class="rest-card" data-id="${x.id}" onclick="focusGoogle('${x.id}')">
+                    <div class="name"><span class="g-badge">Google</span>${escHtml(x.name)}</div>
+                    ${badge}
+                    <div class="meta">📍 <a class="nav-link" href="${mapsUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(x.address)}</a></div>
+                    <div class="meta">${escHtml(x.type || '')}${rating}</div>
+                    <button class="g-save-btn" onclick="event.stopPropagation();saveGooglePlace('${x.id}')">＋ 收藏到我的地图</button>
+                </div>`;
+        }).join('');
+    }
+
+    function findCand(id) { return routeState && routeState.cands[routeState.sel].find(c => c.id === id); }
+
+    function openGoogleInfo(mk, c) {
+        const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(c.name + ' ' + c.address)}`;
+        infoWindow.setContent(`
+            <div class="info-window-content">
+                <h4 style="cursor:pointer;text-decoration:underline dotted;" onclick="highlightCard('${c.id}')">${escHtml(c.name)}</h4>
+                <p>📍 <a class="iw-nav" href="${mapsUrl}" target="_blank" rel="noopener">${escHtml(c.address)}</a></p>
+                <p>🚗 绕路约 ${c.detourMin} 分钟${c.rating ? ' · ⭐ ' + c.rating : ''}</p>
+                <button class="g-save-btn" onclick="saveGooglePlace('${c.id}')">＋ 收藏到我的地图</button>
+            </div>`);
+        infoWindow.open(map, mk);
+    }
+    function focusGoogle(id) {
+        const mk = gMarkers.find(m => m._id === id), c = findCand(id);
+        if (mk && c) { openGoogleInfo(mk, c); map.panTo({ lat: c.lat, lng: c.lng }); }
+    }
+    function highlightCard(id) {
+        infoWindow.close();
+        const card = document.querySelector(`.rest-card[data-id="${id}"]`);
+        if (!card) return;
+        restorePanel();
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.style.outline = '2.5px solid #e8472a';
+        setTimeout(() => { card.style.outline = ''; }, 1800);
+    }
+    function saveGooglePlace(id) {
+        const c = findCand(id); if (!c) return;
+        infoWindow.close();
+        openNewForm();
+        document.getElementById('add-name').value = c.name;
+        document.getElementById('add-address').value = c.address;
+    }
+
+    async function selectRoute(i) {
+        if (!routeState || i === routeState.sel) return;
+        routeState.sel = i;
+        if (!routeState.cands[i]) {
+            showMapMsg('正在计算这条路线的沿途餐厅…', false);
+            await computeCandidates(i);
+        }
+        showRoute();
+    }
+    function setRouteLimit(m) { routeState.limit = m; showRoute(); }
+
+    function clearRoute() {
+        routeState = null;
+        routeLines.forEach(l => l.setMap(null)); routeLines = [];
+        gMarkers.forEach(m => { try { m.map = null; } catch (e) {} }); gMarkers = [];
+        const bar = document.getElementById('route-bar');
+        bar.classList.remove('visible'); bar.innerHTML = '';
+    }
+    function exitRoute() { clearRoute(); applyFilters(); }
 
     // Custom dropdowns for 菜式 / 标签 (options come from the hidden datalists)
     function setupDropdown(input) {
