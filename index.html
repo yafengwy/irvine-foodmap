@@ -1072,6 +1072,12 @@
         if (!name || !address || !cuisine) {
             showStatus('请填写餐厅名称、地址和类型！', 'error'); return;
         }
+        if (saving) return;   // prevent double-tap creating duplicates
+        if (!isEditing) {
+            const dup = restaurants.find(r => (r.name || '').trim().toLowerCase() === name.toLowerCase());
+            if (dup && !confirm(`「${dup.name}」已经存在（${dup.address}），还要再添加一次吗？`)) return;
+        }
+        setSaving(true);
         const loader = document.getElementById('add-loader');
         loader.classList.add('visible');
 
@@ -1096,16 +1102,26 @@
                         : db.collection(COL).add(data);
                     action
                         .then(() => {
+                            setSaving(false);
                             showMapMsg(isEditing ? '✅ 更新成功！' : '✅ 添加成功！', false);
                             clearForm();
                             refreshTscIfNeeded();
                         })
-                        .catch(e => showStatus(e.code === 'permission-denied' ? '没有权限，请先登录。' : '保存失败，请重试。', 'error'));
+                        .catch(e => { setSaving(false); showStatus(e.code === 'permission-denied' ? '没有权限，请先登录。' : '保存失败，请重试。', 'error'); });
                 } else {
+                    setSaving(false);
                     showStatus('地址解析失败，请检查地址格式。', 'error');
                 }
             });
         }, 400);
+    }
+
+    let saving = false;
+    function setSaving(on) {
+        saving = on;
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = on;
+        btn.style.opacity = on ? '0.6' : '';
     }
 
     function clearForm() {
