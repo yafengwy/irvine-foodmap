@@ -450,12 +450,24 @@
             background: rgba(0,0,0,0.45); align-items: center; justify-content: center; padding: 16px;
         }
         #form-modal.open { display: flex; }
-        /* Dropdown arrow on inputs that have suggestion lists (菜式 / 标签) */
-        .form-body input[list] {
-            padding-right: 36px;
-            background: white url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") no-repeat right 12px center;
+        /* Custom dropdown (菜式 / 标签) — native datalist doesn't work in iPhone home-screen app */
+        .dd-wrap { position: relative; margin-bottom: 14px; }
+        .tag-input-group .dd-wrap { flex: 1; margin-bottom: 0; }
+        .dd-wrap input { margin-bottom: 0 !important; padding-right: 40px !important; }
+        .dd-arrow {
+            position: absolute; top: 0; right: 0; width: 40px; height: 100%;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") no-repeat center;
         }
-        .form-body input[list]::-webkit-calendar-picker-indicator { opacity: 0; }
+        .dd-menu {
+            display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20;
+            background: white; border: 1px solid #ddd; border-radius: 8px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.15); max-height: 200px; overflow-y: auto;
+        }
+        .dd-menu.open { display: block; }
+        .dd-item { padding: 10px 12px; font-size: 0.95rem; cursor: pointer; border-bottom: 1px solid #f3f3f3; }
+        .dd-item:last-child { border-bottom: none; }
+        .dd-item:active, .dd-item:hover { background: #fff3ef; }
         .modal-box {
             background: white; border-radius: 14px; padding: 18px;
             width: 100%; max-width: 420px; max-height: 88vh; overflow-y: auto;
@@ -523,13 +535,21 @@
                 <input type="text" id="add-address" placeholder="e.g. 6436 Irvine Blvd, Irvine, CA">
 
                 <label for="add-cuisine">菜式</label>
-                <input type="text" id="add-cuisine" list="cuisine-suggestions" placeholder="e.g. 川菜">
+                <div class="dd-wrap">
+                    <input type="text" id="add-cuisine" data-dd="cuisine-suggestions" placeholder="e.g. 川菜" autocomplete="off">
+                    <span class="dd-arrow"></span>
+                    <div class="dd-menu"></div>
+                </div>
                 <datalist id="cuisine-suggestions"></datalist>
 
                 <label>标签 <span style="color:#aaa;font-weight:400;">(可选)</span></label>
                 <div class="tag-input-group">
                     <!-- ③ tag input with datalist -->
-                    <input type="text" id="add-tag-input" list="tag-suggestions" placeholder="e.g. 辣, 性价比高">
+                    <div class="dd-wrap">
+                        <input type="text" id="add-tag-input" data-dd="tag-suggestions" placeholder="e.g. 辣, 性价比高" autocomplete="off">
+                        <span class="dd-arrow"></span>
+                        <div class="dd-menu"></div>
+                    </div>
                     <datalist id="tag-suggestions"></datalist>
                     <button type="button" onclick="addTagToForm()">添加</button>
                 </div>
@@ -1635,6 +1655,49 @@
         singleId = null;
         applyFilters();
     }
+
+    // Custom dropdowns for 菜式 / 标签 (options come from the hidden datalists)
+    function setupDropdown(input) {
+        const wrap  = input.parentElement;
+        const menu  = wrap.querySelector('.dd-menu');
+        const arrow = wrap.querySelector('.dd-arrow');
+        const listId = input.dataset.dd;
+        const isTag = input.id === 'add-tag-input';
+
+        function options(filter) {
+            const dl = document.getElementById(listId);
+            let opts = dl ? [...dl.options].map(o => o.value) : [];
+            if (isTag) opts = opts.filter(t => !formTags.has(t));
+            const q = filter ? input.value.trim().toLowerCase() : '';
+            return q ? opts.filter(o => o.toLowerCase().includes(q)) : opts;
+        }
+        function show(filter) {
+            const opts = options(filter);
+            if (!opts.length) { menu.classList.remove('open'); return; }
+            menu.innerHTML = opts.map(o => `<div class="dd-item">${escHtml(o)}</div>`).join('');
+            menu.classList.add('open');
+        }
+        function hide() { menu.classList.remove('open'); }
+
+        // Tap arrow: toggle full list
+        arrow.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            if (menu.classList.contains('open')) hide(); else show(false);
+        });
+        input.addEventListener('focus', () => show(false));
+        input.addEventListener('input', () => show(true));
+        input.addEventListener('blur', () => setTimeout(hide, 150));
+        // Pick an option (pointerdown so input doesn't blur first)
+        menu.addEventListener('pointerdown', e => {
+            const item = e.target.closest('.dd-item');
+            if (!item) return;
+            e.preventDefault();
+            input.value = item.textContent;
+            hide();
+            if (isTag) addTagToForm();
+        });
+    }
+    document.querySelectorAll('input[data-dd]').forEach(setupDropdown);
 
     // Drag the orange header down to force-refresh (works in home-screen app)
     (function () {
