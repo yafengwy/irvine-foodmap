@@ -441,6 +441,10 @@
         #back-top-btn.visible { display: flex; }
 
         /* ── GitHub login ── */
+        #app-ver {
+            color: rgba(255,255,255,0.75); font-size: 0.7rem; font-weight: 400;
+            align-self: flex-end; margin: 0 0 4px 6px;
+        }
         #add-btn {
             margin-left: auto; width: 36px; height: 36px; border-radius: 50%;
             background: rgba(255,255,255,0.25); color: white; border: 1.5px solid rgba(255,255,255,0.7);
@@ -591,6 +595,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
+    <span id="app-ver">1.0</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
