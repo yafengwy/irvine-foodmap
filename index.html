@@ -439,12 +439,25 @@
         #back-top-btn.visible { display: flex; }
 
         /* ── GitHub login ── */
-        #auth-btn {
-            margin-left: auto; background: rgba(255,255,255,0.2); color: white;
-            border: 1px solid rgba(255,255,255,0.6); border-radius: 16px;
-            padding: 5px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
-            white-space: nowrap;
+        #add-btn {
+            margin-left: auto; width: 36px; height: 36px; border-radius: 50%;
+            background: rgba(255,255,255,0.25); color: white; border: 1.5px solid rgba(255,255,255,0.7);
+            font-size: 1.4rem; line-height: 1; cursor: pointer; display: flex;
+            align-items: center; justify-content: center; padding: 0;
         }
+        #form-modal {
+            display: none; position: fixed; inset: 0; z-index: 9000;
+            background: rgba(0,0,0,0.45); align-items: center; justify-content: center; padding: 16px;
+        }
+        #form-modal.open { display: flex; }
+        .modal-box {
+            background: white; border-radius: 14px; padding: 18px;
+            width: 100%; max-width: 420px; max-height: 88vh; overflow-y: auto;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        .modal-head { display: flex; align-items: center; justify-content: space-between; }
+        .modal-head h2 { font-size: 1.1rem; color: #e8472a; }
+        .modal-close { background: none; border: none; font-size: 1.2rem; color: #999; cursor: pointer; padding: 4px 8px; }
         /* ── Email login screen ── */
         #login-screen {
             position: fixed; inset: 0; z-index: 9999;
@@ -486,33 +499,17 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <button id="auth-btn" onclick="logout()">退出</button>
+    <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
 <div id="ptr-indicator">↓ 下拉刷新</div>
-
-<div id="login-screen">
-    <div class="login-box">
-        <h2>🍜 Victoria的美食地图</h2>
-        <input type="email" id="login-email" placeholder="邮箱" autocomplete="username">
-        <input type="password" id="login-pass" placeholder="密码" autocomplete="current-password"
-               onkeydown="if(event.key==='Enter')login()">
-        <button id="login-btn" onclick="login()">登录</button>
-        <div id="login-msg"></div>
-        <a id="forgot-link" onclick="forgotPassword()">忘记密码？</a>
-    </div>
-</div>
-
-<div class="main-content">
-    <div class="left-panel" id="left-panel">
-        <!-- ③ Drag handle -->
-        <div class="panel-handle" id="panel-handle" title="下滑收起"></div>
-        <!-- ⑥ Collapsible Add Form -->
-        <div class="form-section">
-            <div class="form-toggle-header" onclick="toggleForm()">
-                <h2 id="form-title">➕ 添加餐厅</h2>
-                <span class="toggle-icon" id="toggle-icon">＋</span>
-            </div>
-            <div class="form-body" id="form-body" style="display:none;">
+<!-- Add / Edit restaurant dialog -->
+<div id="form-modal" onclick="if(event.target===this)clearForm()">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h2 id="form-title">➕ 添加餐厅</h2>
+            <button class="modal-close" onclick="clearForm()">✕</button>
+        </div>
+        <div class="form-body" id="form-body">
                 <label for="add-name">餐厅名称</label>
                 <input type="text" id="add-name" placeholder="e.g. 火锅王">
 
@@ -538,14 +535,32 @@
                 <button class="submit-btn" id="submit-btn" onclick="submitForm()">
                     📍 添加到地图
                 </button>
-                <button class="cancel-btn" id="cancel-btn" style="display:none;" onclick="clearForm()">
-                    取消编辑
+                <button class="cancel-btn" id="cancel-btn" onclick="clearForm()">
+                    取消
                 </button>
                 <div id="add-status" class="status-msg"></div>
                 <div id="add-loader" class="loader"></div>
             </div>
-        </div>
+    </div>
+</div>
 
+
+<div id="login-screen">
+    <div class="login-box">
+        <h2>🍜 Victoria的美食地图</h2>
+        <input type="email" id="login-email" placeholder="邮箱" autocomplete="username">
+        <input type="password" id="login-pass" placeholder="密码" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter')login()">
+        <button id="login-btn" onclick="login()">登录</button>
+        <div id="login-msg"></div>
+        <a id="forgot-link" onclick="forgotPassword()">忘记密码？</a>
+    </div>
+</div>
+
+<div class="main-content">
+    <div class="left-panel" id="left-panel">
+        <!-- ③ Drag handle -->
+        <div class="panel-handle" id="panel-handle" title="下滑收起"></div>
         <!-- Filters -->
         <div class="filter-section">
             <h2>
@@ -722,17 +737,15 @@
     // Which region chip is active (null = none)
     let activeRegion = null;
 
-    // City chip order: most recently clicked first.
-    // Order is frozen for this session (so chips don't jump under your finger);
-    // new clicks take effect next time the app opens / refreshes.
-    const recentCities = JSON.parse(localStorage.getItem('recentCities') || '[]');
-    const cityOrder = recentCities.slice();
+    // City chip order: most recently clicked first (reorders immediately)
+    let citiesJumpTop = false;
     function rememberCities(list) {
         let rc = JSON.parse(localStorage.getItem('recentCities') || '[]');
         rc = [...list, ...rc.filter(c => !list.includes(c))].slice(0, 60);
         localStorage.setItem('recentCities', JSON.stringify(rc));
     }
     function sortCities(cities) {
+        const cityOrder = JSON.parse(localStorage.getItem('recentCities') || '[]');
         return cities.sort((a, b) => {
             const ia = cityOrder.indexOf(a), ib = cityOrder.indexOf(b);
             if (ia !== -1 && ib !== -1) return ia - ib;
@@ -949,13 +962,8 @@
     }
 
     // ⑥ Toggle form collapse
-    function toggleForm() {
-        const body = document.getElementById('form-body');
-        const icon = document.getElementById('toggle-icon');
-        const open = body.style.display !== 'none';
-        body.style.display = open ? 'none' : 'block';
-        icon.classList.toggle('open', !open);
-    }
+    function openForm() { document.getElementById('form-modal').classList.add('open'); }
+    function openNewForm() { clearForm(); openForm(); setTimeout(() => document.getElementById('add-name').focus(), 50); }
 
     // ── Init Map ──
     function initMap() {
@@ -1062,7 +1070,7 @@
                         : db.collection(COL).add(data);
                     action
                         .then(() => {
-                            showStatus(isEditing ? '✅ 更新成功！' : '✅ 添加成功！', 'success');
+                            showMapMsg(isEditing ? '✅ 更新成功！' : '✅ 添加成功！', false);
                             clearForm();
                             refreshTscIfNeeded();
                         })
@@ -1081,11 +1089,8 @@
         document.getElementById('form-title').textContent = '➕ 添加餐厅';
         const btn = document.getElementById('submit-btn');
         btn.textContent = '📍 添加到地图'; btn.classList.remove('editing');
-        document.getElementById('cancel-btn').style.display = 'none';
-        // Collapse form after clearing
-        const body = document.getElementById('form-body');
-        const icon = document.getElementById('toggle-icon');
-        body.style.display = 'none'; icon.classList.remove('open');
+        document.getElementById('add-status').className = 'status-msg';
+        document.getElementById('form-modal').classList.remove('open');
     }
 
     // ── Delete / Edit ──
@@ -1096,10 +1101,7 @@
     }
     function editRestaurant(id) {
         const r = restaurants.find(r => r.id === id); if (!r) return;
-        // Expand form
-        const body = document.getElementById('form-body');
-        const icon = document.getElementById('toggle-icon');
-        body.style.display = 'block'; icon.classList.add('open');
+        openForm();
 
         document.getElementById('add-name').value    = r.name;
         document.getElementById('add-address').value = r.address;
@@ -1110,8 +1112,6 @@
         document.getElementById('form-title').textContent = '✏️ 编辑餐厅';
         const btn = document.getElementById('submit-btn');
         btn.textContent = '💾 保存更改'; btn.classList.add('editing');
-        document.getElementById('cancel-btn').style.display = 'block';
-        document.querySelector('.left-panel').scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     // ── Filters ──
@@ -1140,12 +1140,12 @@
         const keepScroll = cityEl.scrollTop;
         cityEl.innerHTML = html;
         // Box height = 3 rows of chips
-        const first = cityEl.querySelector('.region-chip') || cityEl.querySelector('.chip');
-        if (first) {
-            const rowH = first.offsetHeight, gap = 8, pad = 6;
-            cityEl.style.maxHeight = (rowH * 3 + gap * 2 + pad * 2 + 2) + 'px';
-        }
-        cityEl.scrollTop = keepScroll;
+        // Box height = exactly 4 rows (+ a small peek of row 5 to hint scrolling)
+        cityEl.style.maxHeight = 'none';
+        const tops = [...new Set([...cityEl.querySelectorAll('.chip')].map(c => c.offsetTop))].sort((x, y) => x - y);
+        if (tops.length > 4) cityEl.style.maxHeight = (tops[4] - tops[0] + 6 + 8) + 'px';
+        if (citiesJumpTop) { cityEl.scrollTop = 0; citiesJumpTop = false; }
+        else cityEl.scrollTop = keepScroll;
 
         const cuisineEl = document.getElementById('cuisine-filters');
         html = chip('cuisine','all','全部', activeCuisineFilters.size===0);
@@ -1196,6 +1196,7 @@
                 if (region) {
                     region.cities.forEach(c => activeCityFilters.add(c));
                     rememberCities(region.cities);
+                    citiesJumpTop = true;
                 }
             }
         } else if (type === 'city') {
@@ -1204,7 +1205,7 @@
             if (value === 'all') { activeCityFilters.clear(); }
             else {
                 if (activeCityFilters.has(value)) activeCityFilters.delete(value);
-                else { activeCityFilters.add(value); rememberCities([value]); }
+                else { activeCityFilters.add(value); rememberCities([value]); citiesJumpTop = true; }
             }
         } else {
             const set = type==='cuisine' ? activeCuisineFilters : activeTagFilters;
