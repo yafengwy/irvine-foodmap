@@ -564,7 +564,7 @@ const fns = getFunctions(fb);
 const call = (name) => httpsCallable(fns, name, { timeout: 540000 });
 
 const APP_NAME = 'Finance Track';
-const APP_VERSION = '9.3';
+const APP_VERSION = '9.4';
 const $ = (id) => document.getElementById(id);
 const S = {
   user: null, cats: {}, accounts: {}, items: {}, labels: {}, filters: {}, rules: {}, txs: [], txById: {},
@@ -1710,8 +1710,6 @@ function openDrawer() {
     <a href="#/filters" data-act="drawer-link">${icon('filter_alt')}Filters</a>
     <a href="#/rules" data-act="drawer-link">${icon('bolt')}Automatic Rules</a>
     <div class="drawer-sep"></div>
-    <button data-act="demo-add">${icon('science')}Add demo data</button>
-    <button data-act="demo-del">${icon('delete_sweep')}Remove demo data</button>
     <button data-act="logout">${icon('logout')}Sign out</button>
     <button data-act="check-update">${icon('system_update')}Check for updates</button>
     <div class="meta" style="padding:12px;margin-top:auto">Version ${APP_VERSION}</div></nav>`;
@@ -2751,8 +2749,6 @@ document.addEventListener('click', async (e) => {
       case 'save-rule': await saveRule(); break;
       case 'del-rule': if (!confirm('Delete this rule?')) break; await deleteDoc(doc(db, 'rules', id)); closeSheet(); toast('Rule deleted'); break;
       case 'run-rules': { toast('Applying rules…'); const n = await applyRules(true); toast(n ? `Updated ${n} record${n === 1 ? '' : 's'}` : 'No records needed changes'); break; }
-      case 'demo-add': closeDrawer(); await addDemo(); break;
-      case 'demo-del': closeDrawer(); await removeDemo(); break;
       default: break;
     }
   } catch (err) { console.error(err); toast('Something went wrong: ' + errMsg(err)); }
