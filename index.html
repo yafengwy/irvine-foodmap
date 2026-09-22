@@ -382,10 +382,13 @@ input.row-select { direction: ltr; }
 /* rules grouped by category */
 .rule-group { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; padding: 10px 4px 6px; font: inherit; color: var(--text); text-align: left; }
 .rule-group .n { flex: 1; font-weight: 600; font-size: 15px; }
-.rule-group .ms { color: var(--sub); }
+.rule-group .fold-ic { color: var(--sub); display: flex; }
 
 .rule-hits { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; background: #FFF6E5; }
 .rule-hits > .meta { padding: 0 4px; color: #8A5A00; }
+
+/* category name stands out from the account name in record rows */
+.meta .m-cat { font-weight: 600; color: #48484A; }
 
 </style>
 <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
@@ -520,7 +523,7 @@ const fns = getFunctions(fb);
 const call = (name) => httpsCallable(fns, name, { timeout: 540000 });
 
 const APP_NAME = 'Finance Track';
-const APP_VERSION = '7.6';
+const APP_VERSION = '7.8';
 const $ = (id) => document.getElementById(id);
 const S = {
   user: null, cats: {}, accounts: {}, items: {}, labels: {}, filters: {}, rules: {}, txs: [], txById: {},
@@ -1092,7 +1095,7 @@ function barChart(bs, values, color, opts = {}) {
 }
 function txRowHtml(t, cls = 'top-row') {
   const c = S.cats[t.categoryId];
-  return `<button class="${cls}" data-act="tx" data-id="${t.id}">${catIcon(c)}<span class="mid"><span class="n">${esc(txTitle(t))}</span><span class="meta">${esc(txCatName(c))} · ${esc(accName(S.accounts[t.accountId]))}${t.parentId ? ` <span class="tag">Split</span>` : ''}</span>${txNoteLine(t)}</span><span class="r"><span class="num" style="color:var(${t.amount < 0 ? '--inc' : '--exp'})">${t.amount < 0 ? '+' : '-'}${money(Math.abs(t.amount))}</span><span class="meta">${shortDate(t.date).replace(/, \d{4}$/, '')}</span></span></button>`;
+  return `<button class="${cls}" data-act="tx" data-id="${t.id}">${catIcon(c)}<span class="mid"><span class="n">${esc(txTitle(t))}</span><span class="meta"><b class="m-cat">${esc(txCatName(c))}</b> · ${esc(accName(S.accounts[t.accountId]))}${t.parentId ? ` <span class="tag">Split</span>` : ''}</span>${txNoteLine(t)}</span><span class="r"><span class="num" style="color:var(${t.amount < 0 ? '--inc' : '--exp'})">${t.amount < 0 ? '+' : '-'}${money(Math.abs(t.amount))}</span><span class="meta">${shortDate(t.date).replace(/, \d{4}$/, '')}</span></span></button>`;
 }
 function cardStructure() {
   const spec = cardSpec('structure').spec; const r = rangeOf(getPeriod('structure'));
@@ -1418,7 +1421,7 @@ function viewTx(params) {
     html += `<div class="tx${t.isTransfer ? ' transfer' : ''}">
       <button class="tx-ico" data-act="${t.isTransfer ? 'tx' : 'tx-cat'}" data-id="${t.id}" aria-label="Choose category">${t.isTransfer ? `<span class="ci unknown">${icon('swap_horiz')}</span>` : catIcon(c)}</button>
       <button class="tx-main" data-act="tx" data-id="${t.id}"><span class="mid"><span class="n">${esc(txTitle(t))}</span>
-      <span class="meta">${esc(t.isTransfer ? 'Transfer' : txCatName(c))} · ${esc(accName(acc))}${t.pending ? ' <span class="tag">Pending</span>' : ''}${t.parentId ? ` <span class="tag">Split ${t.splitIdx + 1}/${t.splitN}</span>` : ''}</span>${txNoteLine(t)}${lbls ? `<span class="lbls">${lbls}</span>` : ''}</span>
+      <span class="meta"><b class="m-cat">${esc(t.isTransfer ? 'Transfer' : txCatName(c))}</b> · ${esc(accName(acc))}${t.pending ? ' <span class="tag">Pending</span>' : ''}${t.parentId ? ` <span class="tag">Split ${t.splitIdx + 1}/${t.splitN}</span>` : ''}</span>${txNoteLine(t)}${lbls ? `<span class="lbls">${lbls}</span>` : ''}</span>
       <span class="a num" style="color:${t.isTransfer ? 'inherit' : inflow ? 'var(--inc)' : 'var(--text)'}">${inflow ? '+' : '-'}$${fmt.format(Math.abs(t.amount))}</span></button></div>`;
   }
   if (day) html += '</div>';
@@ -1559,7 +1562,7 @@ function ruleGroupsHtml(list) {
       return `<button class="set-item" data-act="edit-rule" data-id="${r.id}">${ic}<span class="n">${esc(t.cond)}<div class="meta">${esc(t.acts)}</div></span>${icon('chevron_right')}</button>`;
     }).join('');
     const open = !fold.has(g.key);
-    return `<button class="rule-group" data-act="rule-fold" data-id="${g.key}" aria-expanded="${open}">${gIcon}<span class="n">${esc(name)}</span><span class="meta">${g.rules.length}</span>${icon(open ? 'expand_less' : 'expand_more')}</button>
+    return `<button class="rule-group" data-act="rule-fold" data-id="${g.key}" aria-expanded="${open}">${gIcon}<span class="n">${esc(name)}</span><span class="meta">${g.rules.length}</span><span class="fold-ic">${icon(open ? 'expand_less' : 'expand_more')}</span></button>
       ${open ? `<div class="set-list">${rows}</div>` : ''}`;
   }).join('');
 }
@@ -2126,9 +2129,10 @@ function rulePastText(n) { return `Also apply to ${n} past uncategorized record$
 function rulePastCatMatches(d) {
   const r = draftRule(d); if (r.field === 'description' && !r.keywords.length) return [];
   if (r.field === 'account' && !r.accountId) return [];
-  return S.txs.filter((t) => !t.manual && !t.parentId && t.categoryId && !t.isTransfer && ruleMatches(r, t) && (!r.categoryId || t.categoryId !== r.categoryId || r.transfer));
+  const changes = (t) => (r.categoryId && t.categoryId !== r.categoryId) || (r.labelId && S.labels[r.labelId] && !(t.labels || []).includes(r.labelId)) || r.transfer;
+  return S.txs.filter((t) => !t.manual && !t.parentId && t.categoryId && !t.isTransfer && ruleMatches(r, t) && changes(t));
 }
-function ruleOverText(n) { return `Also change ${n} past record${n === 1 ? '' : 's'} that already ${n === 1 ? 'has' : 'have'} a category`; }
+function ruleOverText(n) { return `Also update ${n} past record${n === 1 ? '' : 's'} that already ${n === 1 ? 'has' : 'have'} a category`; }
 function refreshRuleCounts() {
   const d = S.ruleDraft; if (!d) return;
   const a = $('ru-past-n'); if (a) a.textContent = rulePastText(rulePastMatches(d).length);
@@ -2165,7 +2169,7 @@ function renderRule() {
       <label class="set-item">${glyph('swap_horiz', '#8E8E93')}<span class="n">Mark as transfer</span><input type="checkbox" class="switch" id="ru-tr" ${d.transfer ? 'checked' : ''}></label>
     </div>
     <div class="set-list"><label class="set-item">${glyph('history', '#8E8E93')}<span class="n" id="ru-past-n">${rulePastText(rulePastMatches(d).length)}</span><input type="checkbox" class="switch" id="ru-past" ${d.applyPast ? 'checked' : ''}></label>
-      <label class="set-item">${glyph('published_with_changes', '#FF9500')}<span class="n"><span id="ru-over-n">${ruleOverText(rulePastCatMatches(d).length)}</span><div class="meta">Off by default. Replaces their category with this rule’s.</div></span><input type="checkbox" class="switch" id="ru-over" ${d.overwrite ? 'checked' : ''}></label></div>
+      <label class="set-item">${glyph('published_with_changes', '#FF9500')}<span class="n"><span id="ru-over-n">${ruleOverText(rulePastCatMatches(d).length)}</span><div class="meta">Off by default. Gives them this rule’s category and label.</div></span><input type="checkbox" class="switch" id="ru-over" ${d.overwrite ? 'checked' : ''}></label></div>
     ${d.id ? `<button class="pill-btn danger wide" data-act="del-rule" data-id="${d.id}">${icon('delete')}Delete rule</button>` : ''}
     ${saveBar('save-rule', 'Save')}`);
 }
