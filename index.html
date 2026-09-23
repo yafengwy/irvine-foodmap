@@ -536,7 +536,9 @@
         .dd-menu {
             display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20;
             background: white; border: 1px solid #ddd; border-radius: 8px;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.15); max-height: 200px; overflow-y: auto;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.15); max-height: 200px;
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain; touch-action: pan-y;
         }
         .dd-menu.open { display: block; }
         .dd-item { padding: 10px 12px; font-size: 0.95rem; cursor: pointer; border-bottom: 1px solid #f3f3f3; }
@@ -595,7 +597,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">1.5</span>
+    <span id="app-ver">1.6</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
@@ -2220,10 +2222,8 @@
             if (q.length < 2) { items = withHere && !q ? [{ here: true }] : []; render(); return; }
             timer = setTimeout(() => fetchAC(q), 350);
         });
-        input.addEventListener('blur', () => setTimeout(hide, 150));
-        menu.addEventListener('pointerdown', e => {
-            const el = e.target.closest('.dd-item'); if (!el) return;
-            e.preventDefault();
+        input.addEventListener('blur', () => hideAfterBlur(menu, hide));
+        onMenuPick(menu, el => {
             const it = items[+el.dataset.i];
             if (it.here) { input.value = ''; delete input.dataset.placeId; }
             else { input.value = it.text; input.dataset.placeId = it.placeId; }
@@ -2243,6 +2243,26 @@
         bar.classList.remove('visible'); bar.innerHTML = '';
     }
     function exitRoute() { clearRoute(); applyFilters(); }
+
+    // Menu tap handling: tap picks an item, drag scrolls the list instead of selecting
+    function onMenuPick(menu, pick) {
+        let startY = 0, moved = false;
+        menu.addEventListener('touchstart', e => { moved = false; startY = e.touches[0].clientY; menu.dataset.touching = '1'; }, { passive: true });
+        menu.addEventListener('touchmove',  e => { if (Math.abs(e.touches[0].clientY - startY) > 8) moved = true; }, { passive: true });
+        menu.addEventListener('touchend',   e => {
+            menu.dataset.touching = '';
+            if (moved) return;                       // it was a scroll, not a tap
+            const item = e.target.closest('.dd-item');
+            if (item) { e.preventDefault(); pick(item); }
+        });
+        menu.addEventListener('click', e => {        // desktop / mouse
+            const item = e.target.closest('.dd-item');
+            if (item) pick(item);
+        });
+    }
+    function hideAfterBlur(menu, hide) {
+        setTimeout(() => { if (menu.dataset.touching !== '1') hide(); }, 200);
+    }
 
     // Custom dropdowns for 菜式 / 标签 (options come from the hidden datalists)
     function setupDropdown(input) {
@@ -2274,12 +2294,8 @@
         });
         input.addEventListener('focus', () => show(false));
         input.addEventListener('input', () => show(true));
-        input.addEventListener('blur', () => setTimeout(hide, 150));
-        // Pick an option (pointerdown so input doesn't blur first)
-        menu.addEventListener('pointerdown', e => {
-            const item = e.target.closest('.dd-item');
-            if (!item) return;
-            e.preventDefault();
+        input.addEventListener('blur', () => hideAfterBlur(menu, hide));
+        onMenuPick(menu, item => {
             input.value = item.textContent;
             hide();
             if (isTag) addTagToForm();
