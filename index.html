@@ -524,6 +524,12 @@
             padding: 3px 10px; font-size: 0.75rem; cursor: pointer; margin-top: 4px;
         }
         .custom-marker.g-marker .mname { background: #eef5ff; color: #1a4f8b; }
+        /* Current location dot */
+        .me-dot {
+            width: 16px; height: 16px; border-radius: 50%;
+            background: #1a73e8; border: 2.5px solid white;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.25), 0 0 10px rgba(26,115,232,0.7);
+        }
         /* Custom dropdown (菜式 / 标签) — native datalist doesn't work in iPhone home-screen app */
         .dd-wrap { position: relative; margin-bottom: 14px; }
         .tag-input-group .dd-wrap { flex: 1; margin-bottom: 0; }
@@ -597,7 +603,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">1.6</span>
+    <span id="app-ver">1.7</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
@@ -954,6 +960,7 @@
     let routeLines = [], gMarkers = [];
     let locationMode = false;     // true while filtering by proximity
     let userLat = null, userLng = null;
+    let meMarker = null, meCircle = null;
 
     // ── Tesla Supercharger ──
     let teslaActive  = false;
@@ -1379,6 +1386,7 @@
         if (type === 'city' || type === 'region' || type === 'away') {
             if (locationMode) {
                 locationMode = false; userLat = null; userLng = null;
+                hideMe();
                 const btn  = document.getElementById('locate-btn');
                 const menu = document.getElementById('radius-menu');
                 if (btn)  btn.classList.remove('active','loading');
@@ -1700,6 +1708,7 @@
         // Already active: hide menu and exit location mode
         if (locationMode) {
             locationMode = false; userLat = null; userLng = null;
+            hideMe();
             btn.classList.remove('active', 'loading');
             menu.style.display = 'none';
             applyFilters();
@@ -1716,6 +1725,7 @@
                 btn.classList.remove('loading'); btn.classList.add('active');
                 menu.style.display = 'flex';
                 updateActiveRadiusLabel();
+                showMe();
                 zoomToRadius();
                 applyFilters();
             },
@@ -1725,6 +1735,42 @@
             },
             { enableHighAccuracy: true, timeout: 8000 }
         );
+    }
+
+    // Show where I am: blue dot + the radius circle
+    function showMe() {
+        if (userLat === null) return;
+        const pos = { lat: userLat, lng: userLng };
+        if (!meMarker) {
+            const el = document.createElement('div');
+            el.className = 'me-dot';
+            try {
+                meMarker = new google.maps.marker.AdvancedMarkerElement({
+                    position: pos, map, content: el, title: '我的位置', zIndex: 20
+                });
+            } catch (e) {
+                meMarker = new google.maps.Marker({ position: pos, map, title: '我的位置', zIndex: 20 });
+            }
+        } else {
+            meMarker.position = pos;
+            meMarker.map = map;
+        }
+        const radiusM = activeRadiusMiles * KM_PER_MILE * 1000;
+        if (!meCircle) {
+            meCircle = new google.maps.Circle({
+                map, center: pos, radius: radiusM, clickable: false,
+                strokeColor: '#1a73e8', strokeOpacity: 0.6, strokeWeight: 1.5,
+                fillColor: '#1a73e8', fillOpacity: 0.08, zIndex: 1
+            });
+        } else {
+            meCircle.setCenter(pos);
+            meCircle.setRadius(radiusM);
+            meCircle.setMap(map);
+        }
+    }
+    function hideMe() {
+        if (meMarker) { try { meMarker.map = null; } catch (e) { meMarker.setMap(null); } }
+        if (meCircle) meCircle.setMap(null);
     }
 
     function zoomToRadius(filtered) {
@@ -1746,6 +1792,7 @@
     function setRadius(miles) {
         activeRadiusMiles = miles;
         updateActiveRadiusLabel();
+        showMe();
         zoomToRadius();
         applyFilters();
     }
