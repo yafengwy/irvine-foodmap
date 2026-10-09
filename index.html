@@ -603,7 +603,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">1.8</span>
+    <span id="app-ver">1.9</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
@@ -1007,21 +1007,22 @@
 
         if (cache[cacheKey] !== undefined) return cache[cacheKey];
 
-        const { places } = await google.maps.places.Place.searchByText({
+        // Own fetch (not the Maps JS SDK) so the full page URL is sent as Referer
+        // and matches the API key's website restriction
+        const res = await gpost('https://places.googleapis.com/v1/places:searchText', {
             textQuery: 'Tesla Supercharger',
-            fields: ['displayName', 'location', 'formattedAddress'],
-            locationBias: { center: { lat, lng }, radius: 40000 }, // 25 miles
+            locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: 40000 } }, // 25 miles
             maxResultCount: 20
-        });
+        }, 'places.displayName,places.location,places.formattedAddress');
 
         const data = [];
-        (places || []).forEach(p => {
-            const n = (p.displayName || '').toLowerCase();
-            if (!n.includes('destination')) {
+        (res.places || []).forEach(p => {
+            const name = p.displayName ? p.displayName.text : '';
+            if (!name.toLowerCase().includes('destination')) {
                 data.push({
-                    lat:      p.location.lat(),
-                    lng:      p.location.lng(),
-                    name:     p.displayName || 'Tesla Supercharger',
+                    lat:      p.location.latitude,
+                    lng:      p.location.longitude,
+                    name:     name || 'Tesla Supercharger',
                     vicinity: p.formattedAddress || ''
                 });
             }
