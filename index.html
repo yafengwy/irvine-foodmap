@@ -17,10 +17,13 @@
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; width: 100%; }
+        html, body { height: 100dvh; }
         html { background: #e8472a; }
         body {
             font-family: -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
-            background: #f5f5f0; color: #333;
+            /* same orange as the header, so any strip iOS reserves for the
+               status bar blends into it instead of showing as a pale band */
+            background: #e8472a; color: #333;
             overflow: hidden; display: flex; flex-direction: column;
         }
 
@@ -35,16 +38,14 @@
             display: flex; align-items: center; gap: 10px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2); flex-shrink: 0; z-index: 100;
         }
-        header h1 { font-size: 1.2rem; font-weight: 700; }
+        header h1 { font-size: 1.2rem; font-weight: 700; white-space: nowrap; }
         header span { font-size: 1.4rem; }
-        /* Keep the header buttons clear of the system overlay in the top-right corner.
-           Cover screen (short + relatively wide, e.g. iPhone Duo outer screen): */
+        header button { flex-shrink: 0; }
+        /* Cover screen (short + relatively wide, e.g. iPhone Duo outer screen):
+           the system overlay sits on top of the page there, so keep a little
+           extra room on the right — never stacked on the safe-area inset. */
         @media (max-width: 600px) and (min-aspect-ratio: 3/5) {
-            header { padding-right: calc(19% + env(safe-area-inset-right, 0px)); }
-        }
-        /* Large touch screens (iPhone Duo inner screen, tablets) — not desktop: */
-        @media (min-width: 700px) and (pointer: coarse) {
-            header { padding-right: calc(140px + env(safe-area-inset-right, 0px)); }
+            header { padding-right: max(calc(16px + env(safe-area-inset-right, 0px)), 18%); }
         }
 
         .main-content { display: flex; flex: 1; overflow: hidden; }
@@ -406,6 +407,7 @@
             /* map 50%, panel 50% */
             .left-panel {
                 width: 100%; height: 50vh; max-height: 50vh;
+                height: 50dvh; max-height: 50dvh;
                 order: 2; gap: 12px;
                 padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
                 transition: height 0.3s ease, max-height 0.3s ease;
@@ -641,7 +643,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">2.2</span>
+    <span id="app-ver">2.3</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
