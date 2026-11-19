@@ -426,6 +426,25 @@
                 letter-spacing: 2px;
             }
             #restore-btn.visible { display: block; }
+
+            /* Restaurant list: two columns on phones */
+            #rest-list {
+                display: grid; grid-template-columns: 1fr 1fr;
+                gap: 12px; align-items: stretch;
+            }
+            #rest-list > .empty-message { grid-column: 1 / -1; }
+            #rest-list > .rest-card {
+                margin-bottom: 0; min-height: 160px;
+                padding: 12px 12px 10px;
+            }
+            #rest-list .rest-card .name {
+                font-size: 0.95rem; padding-right: 52px;
+                overflow-wrap: anywhere;
+            }
+            #rest-list .rest-card .meta,
+            #rest-list .rest-card .note-text { font-size: 0.76rem; overflow-wrap: anywhere; }
+            #rest-list .card-actions { top: 8px; right: 8px; gap: 4px; }
+            #rest-list .card-btn { font-size: 0.9rem; }
         }
         @media (min-width: 769px) {
             .panel-handle { display: none; }
@@ -608,7 +627,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">2.0</span>
+    <span id="app-ver">2.1</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
