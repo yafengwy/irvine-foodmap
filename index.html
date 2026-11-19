@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
     <title>🍜 Victoria的美食地图</title>
     <meta name="apple-mobile-web-app-title" content="美食地图">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#e8472a">
@@ -14,6 +17,7 @@
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; width: 100%; }
+        html { background: #e8472a; }
         body {
             font-family: -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
             background: #f5f5f0; color: #333;
@@ -23,16 +27,24 @@
         /* ── Header ── */
         header {
             background: linear-gradient(135deg, #e8472a, #f07f3c);
-            color: white; padding: 14px 16px;
+            color: white;
+            padding: calc(14px + env(safe-area-inset-top, 0px))
+                     calc(16px + env(safe-area-inset-right, 0px))
+                     14px
+                     calc(16px + env(safe-area-inset-left, 0px));
             display: flex; align-items: center; gap: 10px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2); flex-shrink: 0; z-index: 100;
         }
         header h1 { font-size: 1.2rem; font-weight: 700; }
         header span { font-size: 1.4rem; }
-        /* Cover screens (short + relatively wide, e.g. iPhone Duo outer screen):
-           keep the header buttons clear of the system overlay in the top-right corner */
+        /* Keep the header buttons clear of the system overlay in the top-right corner.
+           Cover screen (short + relatively wide, e.g. iPhone Duo outer screen): */
         @media (max-width: 600px) and (min-aspect-ratio: 3/5) {
-            header { padding-right: 19%; }
+            header { padding-right: calc(19% + env(safe-area-inset-right, 0px)); }
+        }
+        /* Large touch screens (iPhone Duo inner screen, tablets) — not desktop: */
+        @media (min-width: 700px) and (pointer: coarse) {
+            header { padding-right: calc(140px + env(safe-area-inset-right, 0px)); }
         }
 
         .main-content { display: flex; flex: 1; overflow: hidden; }
@@ -394,7 +406,8 @@
             /* map 50%, panel 50% */
             .left-panel {
                 width: 100%; height: 50vh; max-height: 50vh;
-                order: 2; padding: 10px; gap: 12px;
+                order: 2; gap: 12px;
+                padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
                 transition: height 0.3s ease, max-height 0.3s ease;
                 overflow-y: auto;
             }
@@ -418,7 +431,8 @@
             /* ③ Restore button shown when panel is collapsed */
             #restore-btn {
                 display: none;
-                position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+                position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+                left: 50%; transform: translateX(-50%);
                 background: rgba(232,71,42,0.92); color: white;
                 border: none; border-radius: 20px;
                 padding: 8px 20px; font-size: 1.1rem; cursor: pointer;
@@ -627,7 +641,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">2.1</span>
+    <span id="app-ver">2.2</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
