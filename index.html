@@ -29,7 +29,10 @@
 
         /* ── Header ── */
         header {
-            background: linear-gradient(135deg, #e8472a, #f07f3c);
+            /* vertical gradient: the whole top edge is #e8472a, the same colour the
+               page background paints into any status-bar strip iOS reserves, so the
+               two meet with no visible seam */
+            background: linear-gradient(180deg, #e8472a, #f07f3c);
             color: white;
             padding: calc(14px + env(safe-area-inset-top, 0px))
                      calc(16px + env(safe-area-inset-right, 0px))
@@ -643,7 +646,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">2.3</span>
+    <span id="app-ver">2.4</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
