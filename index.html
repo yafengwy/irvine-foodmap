@@ -29,6 +29,11 @@
         }
         header h1 { font-size: 1.2rem; font-weight: 700; }
         header span { font-size: 1.4rem; }
+        /* Cover screens (short + relatively wide, e.g. iPhone Duo outer screen):
+           keep the header buttons clear of the system overlay in the top-right corner */
+        @media (max-width: 600px) and (min-aspect-ratio: 3/5) {
+            header { padding-right: 19%; }
+        }
 
         .main-content { display: flex; flex: 1; overflow: hidden; }
 
@@ -603,7 +608,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">1.9</span>
+    <span id="app-ver">2.0</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
