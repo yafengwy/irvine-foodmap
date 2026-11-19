@@ -34,7 +34,9 @@
                two meet with no visible seam */
             background: linear-gradient(180deg, #e8472a, #f07f3c);
             color: white;
-            padding: calc(14px + env(safe-area-inset-top, 0px))
+            /* no safe-area padding on top: on the inner portrait screen that inset
+               is huge and doubled the header's height */
+            padding: 14px
                      calc(16px + env(safe-area-inset-right, 0px))
                      14px
                      calc(16px + env(safe-area-inset-left, 0px));
@@ -49,6 +51,11 @@
            extra room on the right — never stacked on the safe-area inset. */
         @media (max-width: 600px) and (min-aspect-ratio: 3/5) {
             header { padding-right: max(calc(16px + env(safe-area-inset-right, 0px)), 18%); }
+        }
+        /* Inner screen held upright: same idea, the overlay paints over the page
+           and the right-hand safe-area inset is 0 there. */
+        @media (min-width: 601px) and (max-aspect-ratio: 1/1) and (pointer: coarse) {
+            header { padding-right: max(calc(16px + env(safe-area-inset-right, 0px)), 21%); }
         }
 
         .main-content { display: flex; flex: 1; overflow: hidden; }
@@ -646,7 +653,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">2.4</span>
+    <span id="app-ver">2.5</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
