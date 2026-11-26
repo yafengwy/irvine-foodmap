@@ -574,6 +574,12 @@
             padding: 3px 10px; font-size: 0.75rem; cursor: pointer; margin-top: 4px;
         }
         .custom-marker.g-marker .mname { background: #eef5ff; color: #1a4f8b; }
+        /* Home pin */
+        .home-marker {
+            font-size: 17px; line-height: 1;
+            filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));
+            cursor: default;
+        }
         /* Current location dot */
         .me-dot {
             width: 16px; height: 16px; border-radius: 50%;
@@ -653,7 +659,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">2.5</span>
+    <span id="app-ver">2.6</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
@@ -1212,8 +1218,41 @@
         geocoder   = new google.maps.Geocoder();
         map.addListener('click', () => infoWindow.close());
         hookZoomSpread();
+        showHome();
 
         if (currentUser) startData();
+    }
+
+    // ── Home pin (always on the map, not affected by filters) ──
+    const HOME_ADDRESS = '215 Parkwood, Irvine, CA 92620';
+    let homeMarker = null;
+
+    function placeHome(pos) {
+        if (homeMarker) { homeMarker.map = map; return; }
+        const el = document.createElement('div');
+        el.className = 'home-marker';
+        el.textContent = '🏠';
+        try {
+            homeMarker = new google.maps.marker.AdvancedMarkerElement({
+                position: pos, map, content: el, title: '家', zIndex: 5
+            });
+        } catch (e) {
+            homeMarker = new google.maps.Marker({ position: pos, map, title: '家', zIndex: 5 });
+        }
+    }
+
+    function showHome() {
+        // geocoded once, then remembered on this device
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem('homePos') || 'null'); } catch (e) {}
+        if (saved && saved.lat && saved.lng) { placeHome(saved); return; }
+        geocoder.geocode({ address: HOME_ADDRESS }, (results, status) => {
+            if (status !== 'OK' || !results[0]) { console.error('home geocode', status); return; }
+            const l = results[0].geometry.location;
+            const pos = { lat: l.lat(), lng: l.lng() };
+            try { localStorage.setItem('homePos', JSON.stringify(pos)); } catch (e) {}
+            placeHome(pos);
+        });
     }
 
     function startData() {
