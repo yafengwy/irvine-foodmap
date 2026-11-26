@@ -659,7 +659,7 @@
 <header>
     <span>🍜</span>
     <h1>Victoria的美食地图</h1>
-    <span id="app-ver">2.6</span>
+    <span id="app-ver">2.7</span>
     <button id="route-btn" onclick="openRouteModal()" title="沿途找餐厅">🧭</button>
     <button id="add-btn" onclick="openNewForm()" title="添加餐厅">＋</button>
 </header>
@@ -1431,11 +1431,14 @@
         sortCities(Array.from(allCities)).forEach(c => html += chip('city', c, c, activeCityFilters.has(c)));
         const keepScroll = cityEl.scrollTop;
         cityEl.innerHTML = html;
-        // Box height = 3 rows of chips
-        // Box height = exactly 4 rows (+ a small peek of row 5 to hint scrolling)
+        // Box height = 3 full rows + the top half of row 4, so it's clear there's more
         cityEl.style.maxHeight = 'none';
-        const tops = [...new Set([...cityEl.querySelectorAll('.chip')].map(c => c.offsetTop))].sort((x, y) => x - y);
-        if (tops.length > 4) cityEl.style.maxHeight = (tops[4] - tops[0] + 6 + 8) + 'px';
+        const chips = [...cityEl.querySelectorAll('.chip')];
+        const tops = [...new Set(chips.map(c => c.offsetTop))].sort((x, y) => x - y);
+        if (tops.length > 3) {
+            const chipH = chips[0].offsetHeight;
+            cityEl.style.maxHeight = Math.round(6 + (tops[3] - tops[0]) + chipH / 2) + 'px';
+        }
         if (citiesJumpTop) { cityEl.scrollTop = 0; citiesJumpTop = false; }
         else cityEl.scrollTop = keepScroll;
 
